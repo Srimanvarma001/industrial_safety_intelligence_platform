@@ -1,0 +1,62 @@
+[
+  {
+    "id": "NM-2024-001",
+    "date": "2024-03-15",
+    "zone": "Z3",
+    "zone_name": "Gas Processing",
+    "pattern": "hot_work_permit_rising_gas",
+    "description": "Hot work permit active in Gas Processing while CO readings rose from 32 to 44 ppm over 20 minutes. Permit was not suspended despite approaching threshold. Near-miss recorded when shift supervisor noticed the trend during handoff.",
+    "score_at_detection": 67,
+    "contributing_factors": ["hot_work_permit", "rising_gas_trend", "shift_changeover_window"],
+    "outcome": "Permit suspended manually, area ventilated. No injury.",
+    "lessons": "Hot work permits should auto-suspend when gas readings exceed 75% of threshold in the same zone."
+  },
+  {
+    "id": "NM-2024-002",
+    "date": "2024-06-22",
+    "zone": "Z6",
+    "zone_name": "Steam Plant",
+    "pattern": "confined_space_gas_leak",
+    "description": "Confined space entry in Steam Plant boiler inspection. Gas detector alarmed at 38 ppm CO during entry. Crew evacuated. Source traced to a leaking valve that was not isolated per procedure.",
+    "score_at_detection": 72,
+    "contributing_factors": ["confined_space_entry", "gas_leak", "incomplete_isolation"],
+    "outcome": "Crew evacuated safely. Valve isolated. Entry permit suspended for 48 hours.",
+    "lessons": "Confined space pre-entry checklist must include independent verification of isolation."
+  },
+  {
+    "id": "NM-2024-003",
+    "date": "2024-09-10",
+    "zone": "Z1",
+    "zone_name": "Blast Furnace A",
+    "pattern": "high_worker_density_gas_event",
+    "description": "Blast Furnace A had 7 workers in zone during a tap-hole maintenance operation when CO levels spiked to 46 ppm. High worker density combined with gas elevation created compound risk.",
+    "score_at_detection": 58,
+    "contributing_factors": ["high_worker_density", "gas_elevation", "maintenance_activity"],
+    "outcome": "Workers donned RPE. No casualties. Maintenance completed under enhanced monitoring.",
+    "lessons": "Worker density limits should be dynamic based on current gas readings, not static headcount caps."
+  },
+  {
+    "id": "NM-2025-001",
+    "date": "2025-01-05",
+    "zone": "Z3",
+    "zone_name": "Gas Processing",
+    "pattern": "hot_work_permit_rising_gas",
+    "description": "Identical pattern to NM-2024-001 but with additional maintenance crew. Three risk factors stacking simultaneously. This was the precursor pattern observed before the Vizag incident.",
+    "score_at_detection": 78,
+    "contributing_factors": ["hot_work_permit", "rising_gas_trend", "confined_space_entry", "shift_changeover_window"],
+    "outcome": "Near-miss flagged during safety audit. No action taken at the time.",
+    "lessons": "CRITICAL: This pattern was documented but no automated intervention existed. Compound risk detection engine would have fired at score 60+."
+  },
+  {
+    "id": "NM-2025-002",
+    "date": "2025-04-18",
+    "zone": "Z2",
+    "zone_name": "Coke Oven Bay",
+    "pattern": "welding_permit_gas_leak",
+    "description": "Welding permit active in Coke Oven Bay. Adjacent gas line developed a slow leak (6 ppm/min increase). Welding continued for 12 minutes before gas alarm triggered.",
+    "score_at_detection": 55,
+    "contributing_factors": ["welding_permit", "gas_leak", "delayed_detection"],
+    "outcome": "Gas leak detected by area monitor. Welding stopped. Line isolated.",
+    "lessons": "Welding permits near gas lines should trigger continuous cross-zone gas monitoring."
+  }
+]

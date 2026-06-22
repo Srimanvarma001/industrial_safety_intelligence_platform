@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=5.0">
+<title>SafetyIQ — Industrial Safety Intelligence Platform</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --color-background-primary:#fff;
+  --color-background-secondary:#F5F6F8;
+  --color-background-warning:#FEF5E7;
+  --color-border-tertiary:#E4E6EA;
+  --color-border-primary:#1A1C1E;
+  --color-text-primary:#1A1C1E;
+  --color-text-secondary:#6B6F76;
+  --color-text-warning:#A8640C;
+  --color-green:#3B6D11;
+  --color-green-bg:#EAF3DE;
+  --color-green-border:#97C459;
+  --color-yellow:#854F0B;
+  --color-yellow-bg:#FAEEDA;
+  --color-yellow-border:#EF9F27;
+  --color-red:#A32D2D;
+  --color-red-bg:#FCEBEB;
+  --color-red-border:#E24B4A;
+  --font-sans:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  --radius-sm:6px;
+  --radius-md:8px;
+  --radius-lg:12px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 12px rgba(0,0,0,.08);
+  --transition:all .2s ease;
+}
+html{height:100%}
+body{
+  font-family:var(--font-sans);
+  background:#F0F1F3;
+  height:100%;
+  color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+.platform{display:flex;flex-direction:column;min-height:100vh;max-width:1440px;margin:0 auto;background:var(--color-background-primary);box-shadow:var(--shadow-md);position:relative}
+
+/* ===== topbar ===== */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 20px;
+  background:var(--color-background-primary);
+  border-bottom:1px solid var(--color-border-tertiary);
+  position:sticky;top:0;z-index:50;gap:12px;
+}
+.topbar-left{display:flex;align-items:center;gap:12px;min-width:0}
+.logo{font-size:16px;font-weight:600;color:var(--color-text-primary);white-space:nowrap}
+.logo span{color:#E24B4A}
+.logo-icon{display:inline-block;width:28px;height:28px;background:#E24B4A;color:#fff;border-radius:var(--radius-sm);text-align:center;line-height:28px;font-size:14px;font-weight:700;flex-shrink:0}
+.sim-badge{font-size:11px;padding:3px 10px;background:var(--color-background-warning);color:var(--color-text-warning);border-radius:20px;font-weight:500;white-space:nowrap;letter-spacing:.02em}
+.topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.time-display{font-size:12px;color:var(--color-text-secondary);font-family:var(--font-mono);white-space:nowrap;display:none}
+@media(min-width:480px){.time-display{display:block}}
+.conn-status{display:flex;align-items:center;gap:4px;font-size:11px;padding:3px 8px;border-radius:20px;font-weight:500}
+.conn-online{background:#EAF3DE;color:#3B6D11}
+.conn-offline{background:#FCEBEB;color:#A32D2D}
+.btn{font-size:12px;padding:7px 14px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-weight:500;transition:var(--transition);white-space:nowrap;letter-spacing:.01em}
+.btn-scenario{background:#E24B4A;color:#fff}
+.btn-scenario:hover:not(:disabled){background:#A32D2D}
+.btn-scenario:disabled{background:var(--color-background-secondary);color:var(--color-text-secondary);cursor:default}
+.btn-reset{background:var(--color-background-secondary);color:var(--color-text-secondary);border:1px solid var(--color-border-tertiary)}
+.btn-reset:hover{background:#E4E6EA}
+
+/* ===== metrics row ===== */
+.metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px 20px;border-bottom:1px solid var(--color-border-tertiary);background:var(--color-background-primary)}
+.metric-card{background:var(--color-background-secondary);border-radius:var(--radius-md);padding:14px 16px;border:1px solid transparent;transition:var(--transition)}
+.metric-card:hover{border-color:var(--color-border-tertiary)}
+.metric-label{font-size:11px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.metric-value{font-size:24px;font-weight:600;color:var(--color-text-primary);line-height:1.2}
+.metric-sub{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+
+/* ===== main layout ===== */
+.main{display:grid;grid-template-columns:1fr 300px;flex:1;min-height:0}
+.left-col{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--color-border-tertiary)}
+.right-panel{padding:16px 18px;overflow-y:auto;background:var(--color-background-primary)}
+
+/* ===== heatmap grid ===== */
+.heatmap-section{padding:16px 20px;border-bottom:1px solid var(--color-border-tertiary)}
+.section-label{font-size:11px;font-weight:600;color:var(--color-text-secondary);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px}
+.plant-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.zone-cell{border-radius:var(--radius-md);padding:14px 12px;cursor:pointer;transition:var(--transition);border:2px solid transparent;position:relative;min-height:100px;display:flex;flex-direction:column;justify-content:space-between}
+.zone-cell:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm)}
+.zone-cell:active{transform:translateY(0)}
+.zone-cell.selected{border-color:var(--color-border-primary)!important;box-shadow:0 0 0 3px rgba(26,28,30,.12)}
+.zone-name{font-size:11px;font-weight:600;margin-bottom:6px;letter-spacing:.01em}
+.zone-score{font-size:24px;font-weight:700;line-height:1}
+.zone-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+.zone-workers{font-size:10px;margin-top:8px;display:flex;align-items:center;gap:4px;opacity:.85}
+.zone-green{background:var(--color-green-bg);border-color:var(--color-green-border)}
+.zone-green .zone-name{color:var(--color-green)}
+.zone-green .zone-score{color:#27500A}
+.zone-green .zone-label{color:#639922}
+.zone-green .zone-workers{color:var(--color-green)}
+.zone-yellow{background:var(--color-yellow-bg);border-color:var(--color-yellow-border)}
+.zone-yellow .zone-name{color:var(--color-yellow)}
+.zone-yellow .zone-score{color:#633806}
+.zone-yellow .zone-label{color:#BA7517}
+.zone-yellow .zone-workers{color:var(--color-yellow)}
+.zone-red{background:var(--color-red-bg);border-color:var(--color-red-border)}
+.zone-red .zone-name{color:var(--color-red)}
+.zone-red .zone-score{color:#791F1F}
+.zone-red .zone-label{color:#E24B4A}
+.zone-red .zone-workers{color:var(--color-red)}
+.pulse{animation:pulse-anim 1.2s infinite}
+@keyframes pulse-anim{0%,100%{opacity:1}50%{opacity:.55}}
+
+/* ===== alert feed ===== */
+.alert-feed{flex:1;overflow-y:auto;padding:16px 20px}
+.alert-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--color-border-tertiary);transition:var(--transition)}
+.alert-item:last-child{border-bottom:none}
+.alert-item:hover{background:var(--color-background-secondary);margin:0 -20px;padding:10px 20px;border-radius:var(--radius-sm)}
+.alert-dot{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0}
+.dot-red{background:#E24B4A}
+.dot-yellow{background:#EF9F27}
+.dot-green{background:#639922}
+.dot-blue{background:#378ADD}
+.alert-content{min-width:0}
+.alert-title{font-size:13px;font-weight:500;color:var(--color-text-primary)}
+.alert-desc{font-size:12px;color:var(--color-text-secondary);margin-top:1px;line-height:1.4}
+.alert-time{font-size:10px;color:var(--color-text-secondary);font-family:var(--font-mono);margin-top:3px}
+
+/* ===== right panel ===== */
+.panel-zone-name{font-size:18px;font-weight:600;color:var(--color-text-primary);margin-bottom:6px}
+.panel-score-row{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.panel-score-big{font-size:32px;font-weight:700;line-height:1}
+.score-red{color:#E24B4A}
+.score-yellow{color:#BA7517}
+.score-green{color:var(--color-green)}
+.score-bar-bg{flex:1;min-width:60px;height:8px;background:var(--color-background-secondary);border-radius:4px;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:4px;transition:width .5s ease}
+.panel-section{margin-bottom:18px}
+.panel-section-title{font-size:11px;font-weight:600;color:var(--color-text-secondary);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--color-border-tertiary)}
+.info-row:last-child{border-bottom:none}
+.info-key{font-size:12px;color:var(--color-text-secondary)}
+.info-val{font-size:13px;font-weight:500;color:var(--color-text-primary)}
+.badge{font-size:10px;padding:3px 8px;border-radius:20px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.badge-red{background:var(--color-red-bg);color:var(--color-red)}
+.badge-yellow{background:var(--color-yellow-bg);color:var(--color-yellow)}
+.badge-green{background:var(--color-green-bg);color:var(--color-green)}
+.badge-blue{background:#E6F1FB;color:#185FA5}
+.reasons-list{display:flex;flex-direction:column;gap:5px}
+.reason-item{font-size:12px;padding:7px 10px;background:var(--color-background-secondary);border-radius:var(--radius-sm);color:var(--color-text-primary);display:flex;gap:8px;align-items:flex-start;line-height:1.4}
+.reason-weight{font-family:var(--font-mono);font-size:11px;color:var(--color-text-warning);min-width:30px;font-weight:600}
+.sparkline-area{height:56px;margin-bottom:6px}
+.no-zone-msg{font-size:14px;color:var(--color-text-secondary);text-align:center;padding:48px 12px;line-height:1.6}
+
+/* ===== LLM explanation box ===== */
+.llm-box{background:var(--color-background-secondary);border-radius:var(--radius-md);padding:12px;font-size:12px;color:var(--color-text-secondary);line-height:1.6;min-height:40px;max-height:200px;overflow-y:auto}
+.llm-loading{display:flex;gap:5px;align-items:center}
+.llm-dot{width:6px;height:6px;border-radius:50%;background:#378ADD;animation:ldot .8s infinite}
+.llm-dot:nth-child(2){animation-delay:.15s}
+.llm-dot:nth-child(3){animation-delay:.3s}
+@keyframes ldot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+.reg-citation{margin-top:4px;padding:5px 8px;border-left:3px solid #378ADD;background:var(--color-background-primary);border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:11px;color:var(--color-text-secondary)}
+.reg-citation strong{color:var(--color-text-primary)}
+
+/* ===== near-miss ===== */
+.near-miss-card{margin-top:8px;padding:10px 12px;border-radius:var(--radius-md);font-size:12px;line-height:1.5}
+.near-miss-card.pattern-warning{background:#FFF8E6;border:1px solid #EF9F27}
+.near-miss-card.pattern-warning .nm-title{color:#854F0B;font-weight:600;margin-bottom:4px}
+.near-miss-card.pattern-critical{background:var(--color-red-bg);border:1px solid var(--color-red-border)}
+.near-miss-card.pattern-critical .nm-title{color:var(--color-red);font-weight:600;margin-bottom:4px}
+
+/* ===== what-if slider ===== */
+.whatif-section{margin-bottom:18px;padding:12px;background:var(--color-background-secondary);border-radius:var(--radius-md)}
+.whatif-label{font-size:11px;font-weight:600;color:var(--color-text-primary);margin-bottom:8px;display:flex;justify-content:space-between}
+.whatif-slider{width:100%;height:5px;-webkit-appearance:none;appearance:none;background:var(--color-border-tertiary);border-radius:3px;outline:none;margin:6px 0 4px}
+.whatif-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#E24B4A;cursor:pointer;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.whatif-slider::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#E24B4A;cursor:pointer;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.whatif-value{font-weight:600;color:var(--color-text-primary)}
+.whatif-result{font-size:13px;margin-top:6px;padding:6px 10px;border-radius:var(--radius-sm);text-align:center;font-weight:600}
+
+/* ===== incident modal ===== */
+.incident-modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.incident-card{background:var(--color-background-primary);border-radius:var(--radius-lg);border:1px solid var(--color-border-tertiary);padding:24px;width:100%;max-width:540px;margin:auto;box-shadow:0 16px 48px rgba(0,0,0,.16);position:relative}
+.incident-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;gap:16px}
+.incident-title{font-size:16px;font-weight:600;color:var(--color-red)}
+.incident-meta{font-size:12px;font-family:var(--font-mono);color:var(--color-text-secondary);margin-bottom:16px;padding:10px 12px;background:var(--color-background-secondary);border-radius:var(--radius-sm);line-height:1.6}
+.incident-section-title{font-size:12px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 8px}
+.incident-factor{font-size:12px;padding:6px 10px;background:var(--color-background-secondary);border-radius:var(--radius-sm);margin-bottom:5px;color:var(--color-text-primary);line-height:1.4}
+.checklist-item{display:flex;gap:10px;align-items:flex-start;padding:6px 0;font-size:13px;color:var(--color-text-primary);line-height:1.4}
+.check-num{font-size:11px;font-family:var(--font-mono);color:var(--color-text-secondary);min-width:20px;font-weight:500}
+.btn-report{width:100%;padding:10px;background:#E24B4A;color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:600;cursor:pointer;transition:var(--transition);margin-top:12px;letter-spacing:.01em}
+.btn-report:hover{background:#A32D2D}
+.btn-report-inactive{background:var(--color-background-secondary);color:var(--color-text-secondary);cursor:default;font-weight:500}
+.btn-report-inactive:hover{background:var(--color-background-secondary)}
+.btn-pdf{width:100%;padding:10px;background:var(--color-background-secondary);color:var(--color-text-primary);border:1px solid var(--color-border-tertiary);border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;transition:var(--transition);margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-pdf:hover{background:#E4E6EA}
+.incident-close{background:var(--color-background-secondary);border:none;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:var(--transition)}
+.incident-close:hover{background:#E4E6EA;color:var(--color-text-primary)}
+
+/* ===== channels dispatched ===== */
+.channel-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px}
+.channel-icon{font-size:14px;width:20px;text-align:center}
+.channel-name{color:var(--color-text-primary);font-weight:500}
+.channel-status{font-size:10px;padding:1px 6px;border-radius:10px;font-weight:500}
+.cs-delivered{background:#EAF3DE;color:#3B6D11}
+.cs-failed{background:#FCEBEB;color:#A32D2D}
+
+.relative{position:relative}
+
+/* ===== responsive ===== */
+@media(max-width:1024px){.main{grid-template-columns:1fr 260px}.plant-grid{grid-template-columns:repeat(3,1fr)}.right-panel{padding:14px 16px}}
+@media(max-width:820px){
+  .main{grid-template-columns:1fr}.left-col{border-right:none}
+  .right-panel{border-top:1px solid var(--color-border-tertiary);max-height:320px}
+  .metrics-row{gap:10px}.plant-grid{grid-template-columns:repeat(4,1fr)}
+}
+@media(max-width:640px){
+  .topbar{padding:10px 14px;flex-wrap:wrap}.topbar-right{gap:8px}.conn-status{font-size:10px;padding:2px 6px}
+  .metrics-row{grid-template-columns:repeat(2,1fr);gap:8px;padding:12px 14px}
+  .metric-card{padding:12px}.metric-value{font-size:20px}
+  .heatmap-section{padding:12px 14px}.plant-grid{grid-template-columns:repeat(2,1fr);gap:8px}
+  .zone-cell{min-height:88px;padding:12px 10px}.zone-score{font-size:20px}
+  .alert-feed{padding:12px 14px}.right-panel{max-height:280px;padding:12px 14px}
+  .panel-score-big{font-size:28px}.logo{font-size:14px}.btn{font-size:11px;padding:6px 10px}
+}
+@media(max-width:400px){
+  .topbar{padding:8px 10px}.topbar-left{gap:8px}
+  .metrics-row{gap:6px;padding:10px}.metric-card{padding:10px}.metric-value{font-size:18px}
+  .plant-grid{gap:6px}.zone-cell{min-height:76px;padding:10px 8px}.zone-score{font-size:17px}
+  .zone-name{font-size:10px}.right-panel{max-height:240px;padding:10px}
+}
+@media(max-width:640px){
+  .incident-modal{padding:12px;align-items:flex-end}
+  .incident-card{padding:18px;border-radius:var(--radius-lg) var(--radius-lg) 0 0;max-height:85vh}
+  .incident-title{font-size:14px}
+}
+@media(max-width:400px){.incident-modal{padding:8px}.incident-card{padding:14px}}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#D0D2D6;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#B0B2B6}
+</style>
+</head>
+<body>
+
+<h2 class="sr-only">Industrial Safety Intelligence Platform — real-time compound risk dashboard for plant floor zones</h2>
+
+<div class="platform relative" id="app">
+
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="logo-icon">⬡</span>
+    <span class="logo">Safety<span>IQ</span></span>
+    <span class="sim-badge">SYNTHETIC DEMO</span>
+    <span class="conn-status conn-online" id="connStatus">● API</span>
+  </div>
+  <div class="topbar-right">
+    <span class="time-display" id="clock">—</span>
+    <button class="btn btn-reset" id="resetBtn" onclick="resetSim()">Reset</button>
+    <button class="btn btn-scenario" id="scenarioBtn" onclick="triggerScenario()">▶ Vizag Scenario</button>
+  </div>
+</div>
+
+<div class="metrics-row">
+  <div class="metric-card">
+    <div class="metric-label">Zones monitored</div>
+    <div class="metric-value" id="m-zones">—</div>
+    <div class="metric-sub">all online</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Workers on floor</div>
+    <div class="metric-value" id="m-workers">—</div>
+    <div class="metric-sub">across 8 zones</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Active alerts</div>
+    <div class="metric-value" id="m-alerts" style="color:#E24B4A">—</div>
+    <div class="metric-sub">last 60 min</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Highest risk zone</div>
+    <div class="metric-value" id="m-topzone" style="font-size:16px">—</div>
+    <div class="metric-sub" id="m-topscore">score: —</div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="left-col">
+    <div class="heatmap-section">
+      <div class="section-label">Plant floor — risk heatmap</div>
+      <div class="plant-grid" id="plantGrid"></div>
+    </div>
+    <div class="alert-feed">
+      <div class="section-label">Event log</div>
+      <div id="alertList"></div>
+    </div>
+  </div>
+
+  <div class="right-panel" id="rightPanel">
+    <div class="no-zone-msg" id="noZoneMsg" style="display:none">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto 8px;opacity:.35;color:var(--color-text-secondary)"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      Select a zone to inspect
+    </div>
+    <div id="zoneDetail" style="display:none"></div>
+    <div id="loadingDetail" style="display:flex;align-items:center;justify-content:center;padding:40px;color:var(--color-text-secondary);font-size:13px;gap:8px">
+      <span class="llm-loading"><span class="llm-dot"></span><span class="llm-dot"></span><span class="llm-dot"></span></span> Loading dashboard...
+    </div>
+  </div>
+</div>
+
+<div id="incidentModal" class="incident-modal" style="display:none">
+  <div class="incident-card">
+    <div class="incident-header">
+      <div>
+        <div class="incident-title">Incident Report — Auto-generated</div>
+        <div style="font-size:12px;color:var(--color-text-secondary);margin-top:4px">Emergency Response Orchestrator</div>
+      </div>
+      <button class="incident-close" onclick="closeIncident()" aria-label="Close">✕</button>
+    </div>
+    <div class="incident-meta" id="incidentMeta"></div>
+    <div class="incident-section-title">Contributing factors (at trigger time)</div>
+    <div id="incidentFactors"></div>
+    <div class="incident-section-title">Alerts dispatched via</div>
+    <div id="incidentChannels"></div>
+    <div class="incident-section-title">Workers in zone at trigger</div>
+    <div id="incidentWorkers"></div>
+    <div class="incident-section-title">Regulatory reference</div>
+    <div class="incident-factor" id="incidentReg"></div>
+    <div class="incident-section-title">Evacuation checklist</div>
+    <div id="incidentChecklist"></div>
+    <button class="btn-pdf" id="pdfDownloadBtn" onclick="downloadPDF()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Download PDF Report
+    </button>
+    <div style="margin-top:12px;padding:12px;background:var(--color-red-bg);border-radius:var(--radius-md)">
+      <div style="font-size:12px;font-weight:600;color:var(--color-red);margin-bottom:4px">Lead time advantage</div>
+      <div style="font-size:13px;color:#791F1F;line-height:1.5">Compound risk flagged <span id="leadTime">—</span> before any single sensor would have breached its standalone threshold. This is the detection gap SafetyIQ closes.</div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const API = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+  ? 'http://localhost:8000' : window.location.origin;
+
+let state = [];
+let selectedZone = null;
+let alerts = [];
+let scenarioActive = false;
+let incidentFired = false;
+let tickInterval = null;
+let clockInterval = null;
+let sparkCharts = {};
+let alertCount = 0;
+let simTime = new Date();
+let currentIncidentZone = null;
+let zoneDataCache = {};
+
+// ===== API helpers =====
+
+async function apiFetch(path, opts = {}) {
+  try {
+    const resp = await fetch(API + path, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', ...opts.headers },
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    document.getElementById('connStatus').className = 'conn-status conn-online';
+    document.getElementById('connStatus').textContent = '● API';
+    return await resp.json();
+  } catch (e) {
+    document.getElementById('connStatus').className = 'conn-status conn-offline';
+    document.getElementById('connStatus').textContent = '⚠ Offline';
+    throw e;
+  }
+}
+
+// ===== Dashboard =====
+
+async function loadDashboard() {
+  try {
+    const data = await apiFetch('/api/dashboard');
+    state = data.zones;
+    simTime = new Date(data.timestamp);
+    updateMetrics(data.metrics);
+    renderGrid();
+    if (selectedZone) {
+      const z = state.find(x => x.id === selectedZone);
+      if (z) showZoneDetail(z.id);
+    }
+    return data;
+  } catch {
+    return fallbackLocalData();
+  }
+}
+
+function fallbackLocalData() {
+  if (state.length) return { zones: state };
+  state = [
+    {id:'Z1',name:'Blast Furnace A',workers:4,baseGas:28,gasThresh:50,permit:null,maintenance:null,changeover:false,score:0,reasons:[],currentGas:28,gasHistory:[28]},
+    {id:'Z2',name:'Coke Oven Bay',workers:2,baseGas:18,gasThresh:45,permit:'welding',maintenance:null,changeover:false,score:0,reasons:[],currentGas:18,gasHistory:[18]},
+    {id:'Z3',name:'Gas Processing',workers:5,baseGas:35,gasThresh:50,permit:null,maintenance:null,changeover:false,score:0,reasons:[],currentGas:35,gasHistory:[35]},
+    {id:'Z4',name:'Ore Handling',workers:3,baseGas:12,gasThresh:60,permit:'hot_work',maintenance:null,changeover:false,score:0,reasons:[],currentGas:12,gasHistory:[12]},
+    {id:'Z5',name:'Slag Yard',workers:2,baseGas:8,gasThresh:60,permit:null,maintenance:null,changeover:false,score:0,reasons:[],currentGas:8,gasHistory:[8]},
+    {id:'Z6',name:'Steam Plant',workers:4,baseGas:22,gasThresh:50,permit:null,maintenance:null,changeover:true,score:0,reasons:[],currentGas:22,gasHistory:[22]},
+    {id:'Z7',name:'Cooling Tower',workers:2,baseGas:5,gasThresh:45,permit:null,maintenance:null,changeover:false,score:0,reasons:[],currentGas:5,gasHistory:[5]},
+    {id:'Z8',name:'Control Room',workers:2,baseGas:2,gasThresh:30,permit:null,maintenance:null,changeover:false,score:0,reasons:[],currentGas:2,gasHistory:[2]},
+  ];
+  recalcLocalScores();
+  renderGrid();
+  updateMetrics();
+  document.getElementById('loadingDetail').style.display = 'none';
+  document.getElementById('noZoneMsg').style.display = '';
+  return { zones: state };
+}
+
+function recalcLocalScores() {
+  state.forEach(z => {
+    let score = 0, reasons = [];
+    const pct = (z.currentGas || z.baseGas) / z.gasThresh;
+    if (pct > 0.8) { score += 30; reasons.push({t:'Gas reading approaching threshold',w:'+30',pct:Math.round(pct*100)}); }
+    else if (pct > 0.6) { score += 15; reasons.push({t:'Gas elevated (>60% of threshold)',w:'+15',pct:Math.round(pct*100)}); }
+    if (z.permit === 'hot_work' && z.gasTrending) { score += 40; reasons.push({t:'Hot work permit active + rising gas trend',w:'+40',pct:null}); }
+    else if (z.permit === 'hot_work') { score += 15; reasons.push({t:'Hot work permit active in zone',w:'+15',pct:null}); }
+    else if (z.permit === 'welding') { score += 8; reasons.push({t:'Welding permit active',w:'+8',pct:null}); }
+    if (z.maintenance === 'confined_space_entry') { score += 20; reasons.push({t:'Confined space entry in progress',w:'+20',pct:null}); }
+    if (z.changeover) { score += 15; reasons.push({t:'Shift changeover — reduced supervision continuity',w:'+15',pct:null}); }
+    if (z.workers > 4) { score += 5; reasons.push({t:'High worker density in zone',w:'+5',pct:null}); }
+    z.score = Math.min(score, 100);
+    z.reasons = reasons;
+    if (z.gasHistory && z.gasHistory.length > 2) {
+      const h = z.gasHistory;
+      z.gasTrending = h[h.length-1] > h[h.length-3] + 3;
+    }
+  });
+}
+
+// ===== Grid =====
+
+function renderGrid() {
+  const grid = document.getElementById('plantGrid');
+  if (!state.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--color-text-secondary)">Loading...</div>'; return; }
+  grid.innerHTML = '';
+  state.forEach(z => {
+    const div = document.createElement('div');
+    div.className = 'zone-cell ' + getZoneClass(z.score) + (selectedZone === z.id ? ' selected' : '');
+    if (z.score >= 61) div.classList.add('pulse');
+    div.onclick = () => selectZone(z.id);
+    div.innerHTML = `
+      <div>
+        <div class="zone-name">${z.id} — ${z.name}</div>
+        <div class="zone-score">${z.score}</div>
+        <div class="zone-label">${getRiskLabel(z.score)}</div>
+      </div>
+      <div class="zone-workers">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        ${z.workers}${z.permit ? '  ·  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> permit' : ''}${z.maintenance ? '  ·  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> maint.' : ''}
+      </div>
+    `;
+    grid.appendChild(div);
+  });
+}
+
+function getZoneClass(score) { return score >= 61 ? 'zone-red' : score >= 31 ? 'zone-yellow' : 'zone-green'; }
+function getScoreClass(score) { return score >= 61 ? 'score-red' : score >= 31 ? 'score-yellow' : 'score-green'; }
+function getBadgeClass(score) { return score >= 61 ? 'badge-red' : score >= 31 ? 'badge-yellow' : 'badge-green'; }
+function getRiskLabel(score) { return score >= 80 ? 'CRITICAL' : score >= 61 ? 'HIGH' : score >= 31 ? 'MEDIUM' : 'LOW'; }
+
+// ===== Select Zone =====
+
+function selectZone(id) {
+  selectedZone = id;
+  renderGrid();
+  showZoneDetail(id);
+}
+
+async function showZoneDetail(id) {
+  const z = state.find(x => x.id === id);
+  if (!z) return;
+
+  document.getElementById('noZoneMsg').style.display = 'none';
+  document.getElementById('loadingDetail').style.display = 'none';
+  const det = document.getElementById('zoneDetail');
+  det.style.display = 'block';
+  const barColor = z.score >= 61 ? '#E24B4A' : z.score >= 31 ? '#EF9F27' : '#639922';
+
+  det.innerHTML = `
+    <div style="margin-bottom:16px">
+      <div class="panel-zone-name">${z.id} — ${z.name}</div>
+      <div class="panel-score-row">
+        <div class="panel-score-big ${getScoreClass(z.score)}">${z.score}</div>
+        <div class="score-bar-bg"><div class="score-bar-fill" style="width:${z.score}%;background:${barColor}"></div></div>
+        <span class="badge ${getBadgeClass(z.score)}">${getRiskLabel(z.score)}</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Gas readings</div>
+      <div class="sparkline-area"><canvas id="spark-${z.id}" role="img" aria-label="Gas trend for ${z.name}">${(z.gasHistory||[]).join(', ')} ppm</canvas></div>
+      <div class="info-row">
+        <span class="info-key">Current (CO)</span>
+        <span class="info-val">${Math.round(z.currentGas||z.baseGas)} ppm</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Threshold</span>
+        <span class="info-val">${z.gasThresh} ppm</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Utilisation</span>
+        <span class="info-val">${Math.round(((z.currentGas||z.baseGas)/z.gasThresh)*100)}%</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Trend</span>
+        <span class="info-val">${z.gasTrending ? '⬆ Rising' : '→ Stable'}</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Operational context</div>
+      <div class="info-row">
+        <span class="info-key">Active permit</span>
+        <span class="info-val">${z.permit ? `<span class="badge badge-yellow">${z.permit.replace('_',' ')}</span>` : '<span class="badge badge-green">none</span>'}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Maintenance</span>
+        <span class="info-val">${z.maintenance ? `<span class="badge badge-red">${z.maintenance.replace(/_/g,' ')}</span>` : '<span class="badge badge-green">none</span>'}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Shift changeover</span>
+        <span class="info-val">${z.changeover ? '<span class="badge badge-yellow">window open</span>' : '<span class="badge badge-green">no</span>'}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Workers present</span>
+        <span class="info-val">${z.workers}</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Risk factors stacking</div>
+      <div class="reasons-list">${z.reasons && z.reasons.length ? z.reasons.map(r => `<div class="reason-item"><span class="reason-weight">${r.w}</span><span>${r.t}${r.pct ? ' ('+r.pct+'% of threshold)' : ''}</span></div>`).join('') : '<div class="reason-item"><span style="color:var(--color-text-secondary)">No risk factors active</span></div>'}</div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">AI Risk Analysis <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--color-text-secondary)">(OISD RAG)</span></div>
+      <div class="llm-box" id="llmBox-${z.id}">
+        <div class="llm-loading"><span class="llm-dot"></span><span class="llm-dot"></span><span class="llm-dot"></span> Analysing risk context...</div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Historical Pattern Match</div>
+      <div id="nearMissBox-${z.id}">
+        <div class="llm-loading"><span class="llm-dot"></span><span class="llm-dot"></span><span class="llm-dot"></span> Checking patterns...</div>
+      </div>
+    </div>
+
+    <div class="whatif-section">
+      <div class="whatif-label">
+        <span>What-If: Gas level adjustment</span>
+        <span class="whatif-value" id="whatifVal-${z.id}">${Math.round(z.currentGas||z.baseGas)} ppm</span>
+      </div>
+      <input type="range" class="whatif-slider" id="whatifSlider-${z.id}"
+        min="0" max="${z.gasThresh + 20}" value="${Math.round(z.currentGas||z.baseGas)}"
+        oninput="onWhatIfChange('${z.id}')">
+      <div class="whatif-result" id="whatifResult-${z.id}" style="background:${barColor}22;color:${barColor}">
+        Score: ${z.score}/100 — ${getRiskLabel(z.score)}
+      </div>
+    </div>
+
+    ${z.score >= 61 ? `<button class="btn-report" onclick="openIncident('${z.id}')">View incident report</button>` : `<button class="btn-report btn-report-inactive" disabled>Incident report (fires at score ≥ 61)</button>`}
+  `;
+
+  setTimeout(() => renderSparkline(z), 50);
+
+  // Fetch LLM explanation
+  fetchLLMExplanation(z.id);
+  fetchNearMisses(z.id);
+}
+
+// ===== LLM Explanation (OISD RAG) =====
+
+async function fetchLLMExplanation(zid) {
+  const box = document.getElementById('llmBox-' + zid);
+  if (!box) return;
+  try {
+    const data = await apiFetch('/api/zones/' + zid + '/explain');
+    let html = '<div style="margin-bottom:6px">' + data.explanation.replace(/\n/g, '<br>') + '</div>';
+    if (data.regulatory_citations && data.regulatory_citations.length) {
+      data.regulatory_citations.forEach(reg => {
+        html += '<div class="reg-citation"><strong>' + reg.standard + ' ' + reg.section + ':</strong> ' + reg.text + '</div>';
+      });
+    }
+    box.innerHTML = html;
+  } catch {
+    box.innerHTML = '<div style="color:var(--color-text-secondary)">Risk explanation unavailable (API offline). The compound risk engine detected ' +
+      (state.find(z => z.id === zid)?.reasons?.length || 0) + ' active risk factors in this zone.</div>';
+  }
+}
+
+// ===== Near Miss =====
+
+async function fetchNearMisses(zid) {
+  const box = document.getElementById('nearMissBox-' + zid);
+  if (!box) return;
+  try {
+    const data = await apiFetch('/api/zones/' + zid + '/near-misses');
+    if (data.insight) {
+      box.innerHTML = '<div class="near-miss-card pattern-critical">' +
+        '<div class="nm-title">⚠ Pattern Match Found</div>' +
+        '<div style="color:var(--color-text-primary)">' + data.insight + '</div></div>';
+    } else {
+      box.innerHTML = '<div style="font-size:12px;color:var(--color-text-secondary);padding:8px 0">No matching historical near-misses for current conditions.</div>';
+    }
+    if (data.matches && data.matches.length) {
+      let extra = '';
+      data.matches.slice(1).forEach(m => {
+        extra += '<div class="near-miss-card pattern-warning" style="margin-top:4px">' +
+          '<div class="nm-title">' + m.id + ' — ' + m.zone_name + ' (' + m.date + ')</div>' +
+          '<div style="color:var(--color-text-primary);font-size:11px">' + m.description.slice(0, 120) + '...</div></div>';
+      });
+      if (extra) box.innerHTML += '<div style="margin-top:4px">' + extra + '</div>';
+    }
+  } catch {
+    box.innerHTML = '<div style="font-size:12px;color:var(--color-text-secondary);padding:8px 0">Historical pattern matching unavailable (API offline).</div>';
+  }
+}
+
+// ===== What-If Slider =====
+
+function onWhatIfChange(zid) {
+  const slider = document.getElementById('whatifSlider-' + zid);
+  const valDisplay = document.getElementById('whatifVal-' + zid);
+  const resultBox = document.getElementById('whatifResult-' + zid);
+  if (!slider || !valDisplay || !resultBox) return;
+
+  const newGas = parseFloat(slider.value);
+  valDisplay.textContent = newGas + ' ppm';
+
+  const z = state.find(x => x.id === zid);
+  if (!z) return;
+
+  let score = 0, reasons = [];
+  const pct = newGas / z.gasThresh;
+  if (pct > 0.8) { score += 30; reasons.push('Gas reading approaching threshold'); }
+  else if (pct > 0.6) { score += 15; reasons.push('Gas elevated (>60% of threshold)'); }
+  if (z.permit === 'hot_work' && z.gasTrending) { score += 40; reasons.push('Hot work + rising gas'); }
+  else if (z.permit === 'hot_work') { score += 15; reasons.push('Hot work permit active'); }
+  else if (z.permit === 'welding') { score += 8; reasons.push('Welding permit active'); }
+  if (z.maintenance === 'confined_space_entry') { score += 20; reasons.push('Confined space entry'); }
+  if (z.changeover) { score += 15; reasons.push('Shift changeover'); }
+  if (z.workers > 4) { score += 5; reasons.push('High worker density'); }
+  score = Math.min(score, 100);
+
+  const color = score >= 61 ? '#E24B4A' : score >= 31 ? '#EF9F27' : '#639922';
+  resultBox.style.background = color + '22';
+  resultBox.style.color = color;
+  resultBox.textContent = 'Score: ' + score + '/100 — ' + getRiskLabel(score);
+}
+
+// ===== Sparkline =====
+
+function renderSparkline(z) {
+  const cid = 'spark-' + z.id;
+  if (sparkCharts[cid]) { sparkCharts[cid].destroy(); delete sparkCharts[cid]; }
+  const ctx = document.getElementById(cid);
+  if (!ctx) return;
+  const data = z.gasHistory || [z.baseGas];
+  const barColor = z.score >= 61 ? '#E24B4A' : z.score >= 31 ? '#EF9F27' : '#639922';
+  try {
+    sparkCharts[cid] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.map((_, i) => i),
+        datasets: [{ data, borderColor: barColor, borderWidth: 2, fill: true, backgroundColor: barColor + '22', tension: 0.4, pointRadius: 0 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          x: { display: false },
+          y: { display: true, min: 0, max: z.gasThresh + 10, grid: { display: false }, ticks: { font: { size: 9 }, color: '#888', maxTicksLimit: 3 } }
+        }
+      }
+    });
+  } catch {}
+}
+
+// ===== Metrics =====
+
+function updateMetrics(metrics) {
+  if (!metrics && state.length) {
+    const maxZ = state.reduce((a, b) => a.score > b.score ? a : b);
+    metrics = {
+      zonesMonitored: state.length,
+      workersOnFloor: state.reduce((s, z) => s + z.workers, 0),
+      activeAlerts: state.filter(z => z.score >= 61).length,
+      highestRiskZone: maxZ.id,
+      highestRiskScore: maxZ.score
+    };
+  }
+  if (!metrics) return;
+  document.getElementById('m-zones').textContent = metrics.zonesMonitored ?? '—';
+  document.getElementById('m-workers').textContent = metrics.workersOnFloor ?? '—';
+  document.getElementById('m-alerts').textContent = metrics.activeAlerts ?? 0;
+  document.getElementById('m-alerts').style.color = (metrics.activeAlerts || 0) > 0 ? '#E24B4A' : 'var(--color-text-primary)';
+  document.getElementById('m-topzone').textContent = metrics.highestRiskZone ?? '—';
+  document.getElementById('m-topscore').textContent = 'score: ' + (metrics.highestRiskScore ?? '—');
+}
+
+// ===== Alerts =====
+
+function addAlert(title, desc, type) {
+  const timeStr = new Date().toISOString().slice(11, 19) + 'Z';
+  alerts.unshift({ title, desc, time: timeStr, type });
+  if (alerts.length > 20) alerts.pop();
+  renderAlerts();
+  if (type === 'red') alertCount++;
+}
+
+function renderAlerts() {
+  const list = document.getElementById('alertList');
+  if (!alerts.length) { list.innerHTML = '<div style="font-size:13px;color:var(--color-text-secondary);padding:8px 0">No events yet</div>'; return; }
+  list.innerHTML = alerts.map(a =>
+    `<div class="alert-item"><div class="alert-dot dot-${a.type}"></div><div class="alert-content"><div class="alert-title">${a.title}</div><div class="alert-desc">${a.desc}</div><div class="alert-time">${a.time}</div></div></div>`
+  ).join('');
+}
+
+// ===== Scenario =====
+
+async function triggerScenario() {
+  if (scenarioActive) return;
+  scenarioActive = true;
+  incidentFired = false;
+  document.getElementById('scenarioBtn').disabled = true;
+  document.getElementById('scenarioBtn').textContent = 'Scenario running...';
+
+  try {
+    const data = await apiFetch('/api/scenario/trigger', { method: 'POST' });
+    addAlert('Vizag Scenario triggered', 'Scripted compound risk sequence started on Z3', 'yellow');
+    if (data.steps) {
+      for (const step of data.steps) {
+        if (step.action === 'orchestrator_fired') {
+          addAlert('COMPOUND RISK THRESHOLD BREACHED', 'Z3 risk score crossed 80 — no single sensor flagged this', 'red');
+          setTimeout(async () => {
+            if (!incidentFired) {
+              incidentFired = true;
+              addAlert('Emergency Response Orchestrator fired', 'Incident report generated · Alerts dispatched · Checklist surfaced', 'blue');
+              addAlert('Evidence snapshot frozen', 'Sensor readings, permits, worker locations locked at trigger time', 'blue');
+              setTimeout(() => openIncident('Z3'), 500);
+            }
+          }, 1000);
+        }
+      }
+    }
+    await loadDashboard();
+    selectZone('Z3');
+    document.getElementById('scenarioBtn').textContent = 'Scenario complete';
+  } catch {
+    // Fallback: run locally
+    runLocalScenario();
+  }
+}
+
+function runLocalScenario() {
+  let z3 = state.find(x => x.id === 'Z3');
+  if (!z3) return;
+  let step = 0;
+  const steps = [
+    () => { z3.permit = 'hot_work'; addAlert('PTW-2291 issued', 'Hot work permit activated — Zone Z3', 'yellow'); },
+    () => { z3.currentGas = 41; z3.gasTrending = true; addAlert('Gas trend detected', 'CO readings rising in Z3 — 41 ppm', 'yellow'); },
+    () => { z3.maintenance = 'confined_space_entry'; z3.workers = 8; addAlert('Maintenance crew entered', 'Confined space entry started — Z3', 'yellow'); },
+    () => { z3.changeover = true; addAlert('Shift changeover window open', 'Supervisor handoff in progress', 'yellow'); },
+    () => { z3.currentGas = 48; recalcLocalScores(); addAlert('COMPOUND RISK BREACHED', 'Z3 risk score crossed', 'red'); },
+    () => {
+      if (!incidentFired) {
+        incidentFired = true;
+        addAlert('Orchestrator fired', 'Incident report generated', 'blue');
+        setTimeout(() => openIncident('Z3'), 500);
+      }
+    },
+    () => { document.getElementById('scenarioBtn').textContent = 'Scenario complete'; }
+  ];
+
+  const intrvl = setInterval(() => {
+    if (step < steps.length) {
+      steps[step]();
+      step++;
+      recalcLocalScores();
+      renderGrid();
+      updateMetrics();
+      selectZone('Z3');
+    } else {
+      clearInterval(intrvl);
+    }
+  }, 2500);
+}
+
+// ===== Reset =====
+
+async function resetSim() {
+  scenarioActive = false;
+  incidentFired = false;
+  alertCount = 0;
+  alerts = [];
+  selectedZone = null;
+  currentIncidentZone = null;
+  document.getElementById('scenarioBtn').disabled = false;
+  document.getElementById('scenarioBtn').textContent = '▶ Vizag Scenario';
+  Object.keys(sparkCharts).forEach(k => { try { sparkCharts[k].destroy(); } catch {} });
+  sparkCharts = {};
+  closeIncident();
+  renderAlerts();
+  await loadDashboard();
+  document.getElementById('noZoneMsg').style.display = '';
+  document.getElementById('zoneDetail').style.display = 'none';
+  document.getElementById('loadingDetail').style.display = 'none';
+}
+
+// ===== Incident =====
+
+async function openIncident(zid) {
+  currentIncidentZone = zid;
+  const z = state.find(x => x.id === zid);
+  if (!z) return;
+  const modal = document.getElementById('incidentModal');
+  modal.style.display = 'flex';
+
+  const ts = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+  document.getElementById('incidentMeta').innerHTML =
+    `Incident ID: INC-${Date.now().toString().slice(-5)}<br>Zone: ${z.id} — ${z.name}<br>Trigger time: ${ts}<br>Score at trigger: ${z.score}/100<br>Workers in zone: ${z.workers}`;
+
+  document.getElementById('incidentFactors').innerHTML = (z.reasons || []).map(r =>
+    `<div class="incident-factor">${r.w} &nbsp; ${r.t}</div>`
+  ).join('') || '<div class="incident-factor">No individual factor exceeded its threshold — compound detection triggered.</div>';
+
+  document.getElementById('incidentChannels').innerHTML =
+    `<div class="channel-row"><span class="channel-icon">📣</span><span class="channel-name">Safety Officer</span> <span class="channel-status cs-delivered">delivered</span></div>
+     <div class="channel-row"><span class="channel-icon">📱</span><span class="channel-name">Shift Supervisor (SMS)</span> <span class="channel-status cs-delivered">delivered</span></div>
+     <div class="channel-row"><span class="channel-icon">🔔</span><span class="channel-name">Emergency Response Team (webhook)</span> <span class="channel-status cs-delivered">delivered</span></div>
+     <div class="channel-row"><span class="channel-icon">💬</span><span class="channel-name">#safety-alerts (Slack)</span> <span class="channel-status cs-delivered">delivered</span></div>`;
+
+  const workerIds = Array.from({ length: z.workers }, (_, i) => `W-${100 + parseInt(zid.slice(1)) * 10 + i}`);
+  document.getElementById('incidentWorkers').innerHTML = workerIds.map(w =>
+    `<div class="incident-factor"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${w} — ${z.name}</div>`
+  ).join('');
+
+  document.getElementById('incidentReg').innerHTML =
+    `OISD Standard 116 §4.2.1: Hot work in areas with flammable gas requires continuous atmospheric monitoring. Gas readings within 80% of LEL threshold mandate work stoppage. Factory Act 1948 §41B: Manufacturer's obligation to disclose hazardous process information before permit issuance.`;
+
+  const checks = [
+    'Immediately suspend all hot work permits in ' + z.id,
+    'Initiate controlled evacuation of ' + z.workers + ' workers via primary exit corridor',
+    'Activate emergency ventilation — confirm airflow positive in 90s',
+    'Isolate gas supply valve GV-' + z.id.slice(1) + '03 at manifold',
+    'Shift supervisor to take headcount at muster point B-' + z.id.slice(1),
+    'Do not re-enter until atmospheric reading < 10% LEL for 15 min'
+  ];
+  document.getElementById('incidentChecklist').innerHTML = checks.map((c, i) =>
+    `<div class="checklist-item"><span class="check-num">${i+1}.</span><span>${c}</span></div>`
+  ).join('');
+
+  document.getElementById('leadTime').textContent = '~12 minutes';
+}
+
+function closeIncident() {
+  document.getElementById('incidentModal').style.display = 'none';
+}
+
+function downloadPDF() {
+  if (currentIncidentZone) {
+    const url = API + '/api/incident/' + currentIncidentZone + '/pdf';
+    window.open(url, '_blank');
+  }
+}
+
+// ===== Clock =====
+
+function updateClock() {
+  document.getElementById('clock').textContent = simTime.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+}
+
+// ===== Init =====
+
+async function init() {
+  await loadDashboard();
+  renderAlerts();
+  updateClock();
+  addAlert('Platform online', 'All 8 zones connected — sensor streams active', 'green');
+  document.getElementById('loadingDetail').style.display = 'none';
+  document.getElementById('noZoneMsg').style.display = '';
+
+  tickInterval = setInterval(async () => {
+    try {
+      await apiFetch('/api/tick', { method: 'POST' });
+      await loadDashboard();
+    } catch {
+      // local tick fallback
+      if (state.length) {
+        state.forEach(z => {
+          const noise = (Math.random() - 0.5) * 4;
+          z.currentGas = Math.max(0, (z.currentGas || z.baseGas) + noise);
+          if (!z.gasHistory) z.gasHistory = [z.baseGas];
+          z.gasHistory.push(Math.round(z.currentGas));
+          if (z.gasHistory.length > 12) z.gasHistory.shift();
+        });
+        recalcLocalScores();
+        renderGrid();
+        updateMetrics();
+        if (selectedZone) showZoneDetail(selectedZone);
+      }
+    }
+  }, 3000);
+
+  clockInterval = setInterval(() => {
+    simTime = new Date(simTime.getTime() + 15000);
+    updateClock();
+  }, 1000);
+}
+
+init();
+</script>
+</body>
+</html>

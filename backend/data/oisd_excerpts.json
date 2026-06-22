@@ -1,0 +1,82 @@
+[
+  {
+    "id": "oisd-116-4.2.1",
+    "standard": "OISD Standard 116",
+    "section": "§4.2.1",
+    "text": "Hot work in areas with flammable gas requires continuous atmospheric monitoring. Gas readings within 80% of LEL threshold mandate work stoppage.",
+    "keywords": ["hot work", "flammable gas", "atmospheric monitoring", "LEL threshold", "work stoppage"],
+    "contexts": ["hot_work_permit", "gas_reading_high"]
+  },
+  {
+    "id": "factory-act-41B",
+    "standard": "Factory Act 1948",
+    "section": "§41B",
+    "text": "Manufacturer's obligation to disclose hazardous process information before permit issuance. Workers must be informed of all chemical hazards present in their work area.",
+    "keywords": ["hazardous process", "permit issuance", "chemical hazards", "worker information"],
+    "contexts": ["permit_issuance", "worker_safety_briefing"]
+  },
+  {
+    "id": "oisd-116-5.3",
+    "standard": "OISD Standard 116",
+    "section": "§5.3",
+    "text": "Confined space entry requires a dedicated safety attendant, continuous gas monitoring, and a pre-entry checklist. Rescue plan must be in place before entry.",
+    "keywords": ["confined space", "safety attendant", "gas monitoring", "rescue plan", "checklist"],
+    "contexts": ["confined_space_entry", "maintenance_activity"]
+  },
+  {
+    "id": "oisd-116-7.1",
+    "standard": "OISD Standard 116",
+    "section": "§7.1",
+    "text": "Shift changeover procedures must include a formal handoff of all active permits, ongoing maintenance activities, and current gas readings. No gap in supervision shall exceed 15 minutes.",
+    "keywords": ["shift changeover", "handoff", "permits", "maintenance", "supervision gap"],
+    "contexts": ["shift_changeover", "supervision_handoff"]
+  },
+  {
+    "id": "factory-act-7A",
+    "standard": "Factory Act 1948",
+    "section": "§7A",
+    "text": "The occupier shall ensure that every worker is provided with adequate safety training and personal protective equipment appropriate to the hazards in the workplace.",
+    "keywords": ["safety training", "personal protective equipment", "PPE", "hazards"],
+    "contexts": ["worker_safety", "training"]
+  },
+  {
+    "id": "oisd-116-8.2",
+    "standard": "OISD Standard 116",
+    "section": "§8.2",
+    "text": "Emergency response plans must be tested every six months. Evacuation routes shall be clearly marked and kept unobstructed at all times. Assembly points must be designated for each zone.",
+    "keywords": ["emergency response", "evacuation", "assembly points", "evacuation routes"],
+    "contexts": ["emergency_response", "evacuation_drill"]
+  },
+  {
+    "id": "factory-act-21",
+    "standard": "Factory Act 1948",
+    "section": "§21",
+    "text": "In every factory, all plants, machinery and equipment shall be maintained in good repair and working condition. Any defect discovered shall be remedied without delay.",
+    "keywords": ["maintenance", "equipment", "defect", "repair"],
+    "contexts": ["maintenance_activity", "equipment_failure"]
+  },
+  {
+    "id": "oisd-116-9.1",
+    "standard": "OISD Standard 116",
+    "section": "§9.1",
+    "text": "Gas detection systems shall be calibrated at intervals not exceeding three months. Sensor drift beyond 10% of span requires immediate recalibration or replacement.",
+    "keywords": ["gas detection", "calibration", "sensor drift", "recalibration"],
+    "contexts": ["gas_sensor", "calibration"]
+  },
+  {
+    "id": "oisd-116-6.2",
+    "standard": "OISD Standard 116",
+    "section": "§6.2",
+    "text": "Permit to work systems shall require written authorization for hot work, confined space entry, and high-risk maintenance. Permits shall be displayed at the work site and visible to all workers in the zone.",
+    "keywords": ["permit to work", "hot work", "confined space", "written authorization"],
+    "contexts": ["permit_system", "hot_work_permit"]
+  },
+  {
+    "id": "factory-act-37",
+    "standard": "Factory Act 1948",
+    "section": "§37",
+    "text": "Where any worker is exposed to any substances which may be injurious to health, the occupier shall provide suitable respiratory protective equipment and ensure its proper use.",
+    "keywords": ["respiratory protection", "injurious substances", "RPE", "protective equipment"],
+    "contexts": ["gas_exposure", "respiratory_hazard"]
+  }
+]
