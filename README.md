@@ -9,42 +9,71 @@ SafetyIQ fuses data from gas sensors, permit-to-work logs, maintenance logs, shi
 - **Risk Engine** — 6 composable weighted rules produce a per-zone risk score (0–100)
 - **Geospatial Heatmap** — 8-zone plant grid color-coded by risk level with drill-down details
 - **LLM Reasoning** — Keyword RAG over OISD/Factory Act regulatory corpus for explainable risk descriptions
-- **Alert Orchestration** — Multi-channel dispatch (in-app, SMS, webhook, Slack) when risk crosses threshold
+- **Alert Orchestration** — Multi-channel dispatch (in-app, SMS, webhook, Slack) via real HTTP calls
 - **Incident Reports** — Auto-generated PDF reports with contributing factors, regulatory citations, and evacuation checklists
 
 ## Tech Stack
 
 | Layer | |
 |---|---|
-| **Frontend** | Vanilla HTML/CSS/JS + Chart.js |
-| **Backend** | FastAPI (Python 3.13) |
+| **Frontend** | Modular SPA — Vanilla JS ES modules + Chart.js (no framework dependency) |
+| **Backend** | FastAPI (Python 3.13) — 17 REST endpoints + WebSocket |
+| **Database** | SQLite (persistent, schema-driven) |
+| **Real-time** | WebSocket push (auto-reconnect), REST polling fallback |
 | **Risk Engine** | Python + JavaScript (dual redundancy) |
 | **RAG** | Keyword-based retrieval over OISD/Factory Act excerpts |
+| **Alert Dispatch** | Real HTTP calls via httpx (configurable webhooks; simulated fallback) |
 | **PDF** | fpdf2 |
 
 ## Quick Start
 
 ```bash
 # Install dependencies
-pip install fastapi uvicorn httpx fpdf2 pydantic
+pip install -r requirements.txt
 
 # Start the server
 uvicorn backend.main:app --reload
 ```
 
-Open `industrial_safety_intelligence_platform.html` in a browser (serve via Live Server or open directly).
+Open `http://localhost:8000` in a browser — the frontend SPA is served automatically.
 
 ## Project Structure
 
 ```
 ├── backend/
-│   ├── main.py               # FastAPI server (12 REST endpoints)
+│   ├── main.py               # FastAPI server (17 REST endpoints + WebSocket)
+│   ├── database.py           # SQLite persistence layer
 │   ├── risk_engine.py        # Compound risk detection
 │   ├── llm_reasoner.py       # OISD RAG + explanation generator
-│   ├── alerts.py             # Multi-channel alert dispatch
+│   ├── alerts.py             # Multi-channel alert dispatch (HTTP + simulated)
 │   ├── report_generator.py   # PDF incident report generation
 │   ├── near_miss.py          # Historical pattern matcher
 │   └── data/                 # Regulatory excerpts & near-miss records
+├── frontend/                 # Modular SPA (ES modules, no build step)
+│   ├── index.html            # Shell
+│   ├── css/styles.css        # Styles
+│   └── js/
+│       ├── app.js            # Main orchestrator
+│       ├── api.js            # API layer + WebSocket client
+│       ├── risk-engine.js    # Score computation (JS mirror of Python engine)
+│       ├── constants.js      # Thresholds & defaults
+│       └── components/       # UI components
+│           ├── zone-grid.js
+│           ├── zone-detail.js
+│           ├── incident-modal.js
+│           └── alert-feed.js
 ├── data_generator.py          # Synthetic event stream generator
-└── industrial_safety_intelligence_platform.html  # Single-page frontend
+├── tests/                     # Pytest test suite (35 tests)
+└── requirements.txt
 ```
+
+## Environment Variables (Alert Dispatch)
+
+| Variable | Purpose |
+|---|---|
+| `SAFETYIQ_WEBHOOK_URL` | URL for Emergency Response Team webhook |
+| `SAFETYIQ_SLACK_URL` | Slack webhook URL for `#safety-alerts` |
+| `SAFETYIQ_SMS_URL` | SMS gateway API endpoint |
+| `SAFETYIQ_SMS_API_KEY` | API key for SMS gateway |
+
+When unset, alerts fall back to simulated delivery.

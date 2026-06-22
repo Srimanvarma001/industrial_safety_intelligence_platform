@@ -41,7 +41,7 @@ This directly maps to the problem statement's two highest-weighted judging crite
                          ┌─────────────────────────────────────────┐
                          │         INGESTION & NORMALIZATION         │
                          │   (data_generator.py → FastAPI backend,   │
-                         │    JSON schema, in-memory state)          │
+                         │    SQLite persistence, JSON schema)       │
                          └───────────────────┬───────────────────────┘
                                              │
                                              ▼
@@ -66,23 +66,25 @@ This directly maps to the problem statement's two highest-weighted judging crite
                    │                          │   │                              │
                    │  • Color-coded zones     │   │  • 4-channel alert dispatch   │
                    │    (green/yellow/red)    │   │    (in-app, SMS, webhook,    │
-                   │  • Live polling every 3s │   │     Slack)                   │
-                   │  • Drill-down per zone:  │   │  • Auto-generated incident   │
-                   │    gas trend sparkline,   │   │    report with cause chain   │
-                   │    permits, maintenance,  │   │  • OISD/Factory Act reg      │
-                   │    workers, risk factors  │   │    citations via RAG         │
-                   │  • What-if gas slider     │   │  • Near-miss pattern match   │
-                   │  • Historical near-miss   │   │  • Downloadable PDF report   │
-                   │    pattern display        │   │  • Evacuation checklist      │
-                   └─────────────────────────┘   └─────────────────────────────┘
+                   │  • WebSocket push        │   │     Slack) via real HTTP     │
+                   │  • Fallback REST polling │   │  • Auto-generated incident   │
+                   │  • Drill-down per zone:  │   │    report with cause chain   │
+                   │    gas trend sparkline,   │   │  • OISD/Factory Act reg      │
+                   │    permits, maintenance,  │   │    citations via RAG         │
+                   │    workers, risk factors  │   │  • Near-miss pattern match   │
+                   │  • What-if gas slider     │   │  • Downloadable PDF report   │
+                   │  • Historical near-miss   │   │  • Evacuation checklist      │
+                   │    pattern display        │   └─────────────────────────────┘
+                   └─────────────────────────┘
                                          │                 │
                                          └────────┬────────┘
-                                                   ▼
-                                   ┌─────────────────────────────────────┐
-                                   │   SAFETY OFFICER DASHBOARD           │
-                                   │  (single-page HTML + FastAPI backend)│
-                                   │   responsive: desktop → tablet → mobile│
-                                   └─────────────────────────────────────┘
+                                                  ▼
+                                  ┌─────────────────────────────────────┐
+                                  │   SAFETY OFFICER DASHBOARD           │
+                                  │  (modular SPA — frontend/ directory) │
+                                  │   WebSocket · REST · SQLite-backed   │
+                                  │   responsive: desktop → tablet → mobile│
+                                  └─────────────────────────────────────┘
 ```
 
 ### Mermaid version
@@ -103,6 +105,19 @@ flowchart TD
     G --> K[Safety Officer Dashboard]
     H --> K
     L[Synthetic Data Generator] --> E
+
+    subgraph "Persistence"
+        DB[(SQLite)]
+    end
+    E --> DB
+    F --> DB
+    H --> DB
+
+    subgraph "Real-time"
+        WS[WebSocket /ws]
+    end
+    DB --> G
+    WS <--> K
 ```
 
 ---
@@ -115,6 +130,8 @@ All data sources are **synthetic but schema-realistic**, driven by two mechanism
 
 - **`data_generator.py`** — standalone Python script that streams JSON events (gas readings, permits, maintenance, worker locations) to stdout or directly to the FastAPI backend. Supports a scripted Vizag scenario injection.
 - **Built-in JS simulation** — the frontend runs a lightweight tick loop that adds Gaussian noise to gas readings every 3 seconds, maintaining full offline demo capability.
+
+Events are persisted to **SQLite** (`backend/data/safetyiq.db`) with tables for zones, gas readings, alerts, and incidents.
 
 Sample event schemas:
 
@@ -182,7 +199,7 @@ Sample event schemas:
 | Shift changeover window | +15 | `changeover=true` |
 | High worker density | +5 | `workers > 4` |
 
-Implemented in both **Python** (`backend/risk_engine.py`) and **JavaScript** (frontend fallback) for dual-engine redundancy.
+Implemented in both **Python** (`backend/risk_engine.py`) and **JavaScript** (`frontend/js/risk-engine.js`) for dual-engine redundancy.
 
 ```python
 def compound_risk_score(zone_state, gas_history=None):
@@ -223,6 +240,7 @@ def compound_risk_score(zone_state, gas_history=None):
 
 - **8-zone plant grid** rendered as a responsive CSS grid: 4 columns on desktop, 3 on tablet, 2 on mobile
 - Each zone color-coded: **green** (0–30), **yellow** (31–60), **red** (61–100) with animated pulse for critical zones
+- **Real-time updates via WebSocket** — state is pushed every 3 seconds over `/ws`; falls back to REST polling if WebSocket disconnects
 - Click any zone → right panel drill-down shows:
   - Gas trend sparkline (Chart.js, last 12 readings)
   - Current reading vs threshold with utilisation %
@@ -233,7 +251,7 @@ def compound_risk_score(zone_state, gas_history=None):
   - **Historical Pattern Match** — near-miss records with overlapping risk factor profiles
   - **What-If Slider** — interactive gas level adjustment with live score recalculation
 - Responsive layout: sidebar collapses below main content on tablets/phones
-- Sticky topbar with clock, connection status indicator, and scenario controls
+- Sticky topbar with clock, WebSocket connection indicator, and scenario controls
 
 ### 4.4 Emergency Response Orchestrator
 
@@ -241,10 +259,11 @@ Triggered when a zone's combined risk score crosses the configurable HIGH thresh
 
 1. **4-channel alert dispatch** (`alerts.py`):
    - 📣 Safety Officer (in-app notification)
-   - 📱 Shift Supervisor (SMS simulation)
-   - 🔔 Emergency Response Team (webhook to `https://hooks.safetyiq.internal/ert`)
-   - 💬 #safety-alerts (Slack webhook simulation)
-   Each channel reports delivery status (delivered/failed) displayed in the incident modal.
+   - 📱 Shift Supervisor (SMS via configurable API endpoint)
+   - 🔔 Emergency Response Team (real HTTP webhook to configurable URL)
+   - 💬 #safety-alerts (Slack webhook to configurable URL)
+   
+   When webhook URLs are configured via environment variables (`SAFETYIQ_WEBHOOK_URL`, `SAFETYIQ_SLACK_URL`, `SAFETYIQ_SMS_URL`), the dispatch makes real HTTP calls using `httpx`. Otherwise falls back to simulated delivery. Each channel reports delivery status (delivered/failed/HTTP status) displayed in the incident modal.
 
 2. **Evidence snapshot** — freezes contributing sensor readings, active permits, maintenance state, and worker locations at trigger time, displayed in the incident report.
 
@@ -257,29 +276,57 @@ Triggered when a zone's combined risk score crosses the configurable HIGH thresh
    - Evacuation checklist
    - Lead time estimate
 
-4. **Multi-channel dispatch display** — the incident modal shows all 4 alert channels with individual delivery timestamps.
+4. **Multi-channel dispatch display** — the incident modal shows all 4 alert channels with individual delivery timestamps and HTTP status codes (when applicable).
 
 5. **PDF download** — `report_generator.py` uses fpdf2 to generate a formatted, downloadable PDF version of the incident report via `/api/incident/{zone}/pdf`.
 
 6. **Historical pattern match** — `near_miss.py` compares the current incident's risk factor vector against 5 documented near-miss records, returning the top matches with outcome summaries and lessons learned. Displayed in the zone detail panel alongside the LLM analysis.
 
-### 4.5 Project Structure
+### 4.5 Persistence Layer
+
+`backend/database.py` implements a **SQLite** persistence layer with four tables:
+
+| Table | Purpose |
+|---|---|
+| `zones` | Zone configuration (name, gas threshold, permit, workers, etc.) |
+| `gas_history` | Time-series gas readings per zone (trimmed to last 12) |
+| `alerts` | All dispatched alerts with delivery results |
+| `incidents` | Generated incident reports (JSON blob) |
+
+The database is initialized on startup via `init_db()` and all REST endpoints read/write through it. The old HTML file (`industrial_safety_intelligence_platform.html`) remains as a standalone fallback.
+
+### 4.6 Project Structure
 
 ```
 industrial-safety/
-├── industrial_safety_intelligence_platform.html   # Single-page frontend (responsive)
-├── industrial-safety-intelligence-architecture.md  # This document
-├── data_generator.py                              # Synthetic event stream generator
-└── backend/
-    ├── main.py                                    # FastAPI server (16 endpoints)
-    ├── risk_engine.py                             # Compound risk detection engine
-    ├── llm_reasoner.py                            # OISD RAG + explanation generator
-    ├── alerts.py                                  # Multi-channel alert dispatch
-    ├── report_generator.py                        # PDF incident report generation
-    ├── near_miss.py                               # Historical pattern matcher
-    └── data/
-        ├── oisd_excerpts.json                     # 10 OISD/Factory Act excerpts
-        └── near_misses.json                       # 5 historical near-miss records
+├── backend/
+│   ├── main.py                   # FastAPI server (17 REST + WebSocket)
+│   ├── database.py               # SQLite persistence layer
+│   ├── risk_engine.py            # Compound risk detection engine
+│   ├── llm_reasoner.py           # OISD RAG + explanation generator
+│   ├── alerts.py                 # Multi-channel alert dispatch (HTTP + sim)
+│   ├── report_generator.py       # PDF incident report generation
+│   ├── near_miss.py              # Historical pattern matcher
+│   └── data/
+│       ├── oisd_excerpts.json    # 10 OISD/Factory Act excerpts
+│       └── near_misses.json      # 5 historical near-miss records
+├── frontend/                     # Modular SPA (no build step)
+│   ├── index.html                # Shell (47 lines)
+│   ├── css/styles.css            # All styles
+│   └── js/
+│       ├── app.js                # Main orchestrator
+│       ├── api.js                # API layer + WebSocket client
+│       ├── risk-engine.js        # Score computation (JS mirror)
+│       ├── constants.js          # Thresholds & defaults
+│       └── components/
+│           ├── zone-grid.js      # Heatmap grid
+│           ├── zone-detail.js    # Detail panel (sparkline, LLM, near-miss)
+│           ├── incident-modal.js # Incident report modal
+│           └── alert-feed.js     # Event log
+├── data_generator.py             # Synthetic event stream generator
+├── tests/                        # Pytest test suite (35 tests)
+├── industrial_safety_intelligence_platform.html  # Legacy standalone (preserved)
+└── requirements.txt
 ```
 
 ---
@@ -288,13 +335,14 @@ industrial-safety/
 
 | Layer | Technology |
 |---|---|
-| Frontend | Vanilla HTML/CSS/JS + Chart.js (CDN) — no framework dependency |
-| Backend API | FastAPI (Python 3.13) — 16 REST endpoints |
-| State management | In-memory (Python dicts) + localStorage-ready frontend fallback |
-| Risk engine | Python (`backend/risk_engine.py`) + JavaScript dual implementation |
+| Frontend | Modular SPA — Vanilla JS ES modules + Chart.js 4.4.1 (no framework) |
+| Backend API | FastAPI (Python 3.13) — 17 REST endpoints + WebSocket `/ws` |
+| Database | SQLite (persistent, schema-driven with WAL mode) |
+| Real-time | WebSocket push with auto-reconnect; REST polling fallback |
+| Risk engine | Python (`backend/risk_engine.py`) + JavaScript (`risk-engine.js`) dual impl. |
 | RAG corpus | 10 curated OISD/Factory Act excerpts, keyword-based retrieval |
 | PDF generation | fpdf2 |
-| Alert dispatch | httpx (async webhook calls) |
+| Alert dispatch | httpx async HTTP calls (real webhooks when configured) |
 | Data generation | Python script (`data_generator.py`) + built-in JS simulator |
 | Responsive design | Pure CSS with 4 breakpoints (1440px → 360px) |
 | Charts | Chart.js 4.4.1 (sparkline gas trends) |
@@ -317,17 +365,19 @@ industrial-safety/
 | GET | `/api/incident/{id}/pdf` | Download PDF report |
 | GET | `/api/alerts` | Alert dispatch log |
 | GET | `/api/incidents` | Incident history |
+| POST | `/api/reset` | Reset simulation state |
+| **WS** | **`/ws`** | **Real-time dashboard push (every 3s)** |
 
 ---
 
 ## 7. Demo Script (~3–4 minutes)
 
-1. **Open on the dashboard** — plant heatmap, all zones green/yellow. Connection status shows "● API" confirming backend is live. Briefly narrate the problem (Vizag incident, data-present-but-unacted-upon pattern).
+1. **Open `http://localhost:8000`** — plant heatmap, all zones green/yellow. Connection status shows "● WebSocket" confirming live push. Briefly narrate the problem (Vizag incident, data-present-but-unacted-upon pattern).
 2. **Click any zone** — right panel shows gas sparkline, permits, maintenance status, stacked risk factors, AI risk analysis with OISD citations, and historical near-miss matches.
 3. **Try the What-If slider** — drag the gas level up and watch the score recalculate in real time. Show how the zone transitions from green → yellow → red as the compound score climbs.
 4. **Trigger the scripted scenario** — hot work permit issued in Zone 3, gas readings begin trending up, maintenance crew enters confined space, shift changeover window opens.
 5. **Watch the compound score climb** — zone turns yellow, then red, with the side panel showing the stacking reasons. Note: no single sensor threshold was breached.
-6. **Orchestrator fires** — incident modal appears showing 4 alert channels (all "delivered"), contributing factors with weights, 8 affected workers, OISD regulatory citations, and a 6-step evacuation checklist.
+6. **Orchestrator fires** — incident modal appears showing 4 alert channels (live HTTP delivery status where configured), contributing factors with weights, 8 affected workers, OISD regulatory citations, and a 6-step evacuation checklist.
 7. **Download the PDF** — click the "Download PDF Report" button to show the formatted incident document.
 8. **Close on impact framing** — lead time gained (~12 minutes), and tie back to judging criteria: compound detection accuracy, lead time, reduced false negatives.
 
@@ -339,9 +389,9 @@ industrial-safety/
 |---|---|---|
 | Innovation | 25% | Compound/multi-signal detection vs. single-sensor thresholds — the core novel mechanism. What-if slider for interactive exploration. |
 | Business Impact | 25% | Closes the full loop: detection → visualization → automated action → documented report. Demonstrates ~12 min lead time advantage. |
-| Technical Excellence | 20% | Multi-source fusion, OISD RAG/LLM reasoning layer with regulatory grounding, live geospatial rendering, PDF generation, historical pattern matching, dual Python/JS engines. |
-| Scalability | 15% | Rule engine and schema are zone/sensor-type agnostic — same architecture extends to any plant layout, sensor mix, or additional risk rules. |
-| User Experience | 15% | Single-pane responsive dashboard, drill-down without leaving heatmap view, interactive what-if slider, works on mobile through ultrawide. |
+| Technical Excellence | 20% | Multi-source fusion, OISD RAG/LLM reasoning layer with regulatory grounding, live geospatial rendering via WebSocket, PDF generation, historical pattern matching, dual Python/JS engines, SQLite persistence. |
+| Scalability | 15% | Rule engine and schema are zone/sensor-type agnostic — same architecture extends to any plant layout, sensor mix, or additional risk rules. SQLite can be swapped for PostgreSQL. |
+| User Experience | 15% | Single-pane responsive dashboard, WebSocket real-time updates, drill-down without leaving heatmap view, interactive what-if slider, works on mobile through ultrawide. |
 
 ---
 
@@ -349,11 +399,11 @@ industrial-safety/
 
 ### Near-term (next iteration)
 
-- **Persistent storage** — replace in-memory state with SQLite/PostgreSQL so data survives restarts and historical queries become possible across sessions.
-- **Real WebSocket streaming** — replace 3-second polling with Server-Sent Events or WebSocket for true sub-second live updates.
-- **OISD RAG upgrade** — replace keyword retrieval with embeddings (sentence-transformers + FAISS) for semantic search over the full OISD 116 standard and Factory Act text.
+- **PostgreSQL upgrade** — replace SQLite with PostgreSQL for concurrent multi-user access and richer query capabilities.
+- **Embedding-based OISD RAG** — replace keyword retrieval with sentence-transformers + FAISS for semantic search over the full OISD 116 standard and Factory Act text.
 - **Multi-zone incidents** — when two or more zones breach HIGH simultaneously, show a prioritised incident queue with severity-based routing.
 - **Authenticated user roles** — Safety Officer, Shift Supervisor, Plant Manager — each with different dashboard views and action permissions.
+- **Sub-second WebSocket** — reduce broadcast interval from 3s to <500ms for true real-time feel.
 
 ### Medium-term
 
