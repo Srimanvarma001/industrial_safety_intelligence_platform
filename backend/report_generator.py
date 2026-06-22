@@ -10,6 +10,9 @@ def generate_incident_report(zone: dict, reasons: list[dict], workers: int) -> d
 
     regulations = retrieve_relevant_regulations(zone)
 
+    def _sanitize(text: str) -> str:
+        return text.replace("—", "-").replace("\u2013", "-").replace("\u2014", "-")
+
     report = {
         "incident_id": f"INC-{ts.strftime('%Y%m%d%H%M%S')}",
         "generated_at": ts.isoformat(),
@@ -18,6 +21,7 @@ def generate_incident_report(zone: dict, reasons: list[dict], workers: int) -> d
             "name": zone["name"]
         },
         "trigger_score": zone.get("score", 0),
+        "risk_label": zone.get("riskLabel", "UNKNOWN"),
         "workers_in_zone": workers,
         "contributing_factors": [
             {
@@ -31,17 +35,17 @@ def generate_incident_report(zone: dict, reasons: list[dict], workers: int) -> d
             {
                 "standard": r["standard"],
                 "section": r["section"],
-                "text": r["text"]
+                "text": _sanitize(r["text"])
             }
             for r in regulations
         ],
-        "checklist": [
-            f"Immediately suspend all hot work permits in {zone['id']}",
-            f"Initiate controlled evacuation of {workers} workers via primary exit corridor",
-            "Activate emergency ventilation — confirm airflow positive in 90s",
-            f"Isolate gas supply valve GV-{zone['id'][1:]}03 at manifold",
-            f"Shift supervisor to take headcount at muster point B-{zone['id'][1:]}",
-            "Do not re-enter until atmospheric reading < 10% LEL for 15 min"
+        "evacuation_checklist": [
+            _sanitize(f"Immediately suspend all hot work permits in {zone['id']}"),
+            _sanitize(f"Initiate controlled evacuation of {workers} workers via primary exit corridor"),
+            _sanitize("Activate emergency ventilation - confirm airflow positive in 90s"),
+            _sanitize(f"Isolate gas supply valve GV-{zone['id'][1:]}03 at manifold"),
+            _sanitize(f"Shift supervisor to take headcount at muster point B-{zone['id'][1:]}"),
+            _sanitize("Do not re-enter until atmospheric reading < 10% LEL for 15 min")
         ]
     }
 
@@ -74,12 +78,12 @@ def generate_pdf(report: dict) -> bytes:
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(60, 60, 60)
     details = [
-        (f"Zone: {report['zone']['id']} - {report['zone']['name']}", ""),
-        (f"Trigger Score: {report['trigger_score']}/100", ""),
-        (f"Workers in Zone: {report['workers_in_zone']}", ""),
+        f"Zone: {report['zone']['id']} - {report['zone']['name']}",
+        f"Trigger Score: {report['trigger_score']}/100 ({report.get('risk_label', 'N/A')})",
+        f"Workers in Zone: {report['workers_in_zone']}",
     ]
-    for label, val in details:
-        pdf.cell(0, 6, label, new_x="LMARGIN", new_y="NEXT")
+    for line in details:
+        pdf.cell(0, 6, line, new_x="LMARGIN", new_y="NEXT")
 
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 11)
@@ -127,7 +131,7 @@ def generate_pdf(report: dict) -> bytes:
 
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(60, 60, 60)
-    for i, item in enumerate(report["checklist"], 1):
+    for i, item in enumerate(report["evacuation_checklist"], 1):
         pdf.cell(0, 6, f"  {i}. {item}", new_x="LMARGIN", new_y="NEXT")
 
     pdf.ln(6)

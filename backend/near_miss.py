@@ -46,6 +46,7 @@ def find_similar_incidents(zone: dict, score: int, reasons: list[dict]) -> list[
 
     for m in matches:
         m["match_score"] = round((m.get("score_at_detection", 0) + score) / 2)
+        m["incident_id"] = m["id"]
 
     return matches
 

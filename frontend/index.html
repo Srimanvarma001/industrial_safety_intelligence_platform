@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=5.0">
+<title>SafetyIQ - Industrial Safety Intelligence Platform</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<h2 class="sr-only">Industrial Safety Intelligence Platform — real-time compound risk dashboard for plant floor zones</h2>
+
+<div class="platform relative" id="app">
+
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="logo-icon">⬡</span>
+    <span class="logo">Safety<span>IQ</span></span>
+    <span class="sim-badge">SYNTHETIC DEMO</span>
+    <span class="conn-status conn-online" id="connStatus">● WebSocket</span>
+  </div>
+  <div class="topbar-right">
+    <span class="time-display" id="clock">—</span>
+    <button class="btn btn-reset" onclick="resetSim()">Reset</button>
+    <button class="btn btn-scenario" id="scenarioBtn" onclick="triggerScenario()">▶ Vizag Scenario</button>
+  </div>
+</div>
+
+<div class="metrics-row">
+  <div class="metric-card">
+    <div class="metric-label">Zones monitored</div>
+    <div class="metric-value" id="m-zones">—</div>
+    <div class="metric-sub">all online</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Workers on floor</div>
+    <div class="metric-value" id="m-workers">—</div>
+    <div class="metric-sub">across 8 zones</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Active alerts</div>
+    <div class="metric-value" id="m-alerts" style="color:#E24B4A">—</div>
+    <div class="metric-sub">last 60 min</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Highest risk zone</div>
+    <div class="metric-value" id="m-topzone" style="font-size:16px">—</div>
+    <div class="metric-sub" id="m-topscore">score: —</div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="left-col">
+    <div class="heatmap-section">
+      <div class="section-label">Plant floor — risk heatmap</div>
+      <div class="plant-grid" id="plantGrid"></div>
+    </div>
+    <div class="alert-feed">
+      <div class="section-label">Event log</div>
+      <div id="alertList"></div>
+    </div>
+  </div>
+
+  <div class="right-panel" id="rightPanel">
+    <div class="no-zone-msg" id="noZoneMsg" style="display:none">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto 8px;opacity:.35;color:var(--color-text-secondary)"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      Select a zone to inspect
+    </div>
+    <div id="zoneDetail" style="display:none"></div>
+    <div id="loadingDetail" style="display:flex;align-items:center;justify-content:center;padding:40px;color:var(--color-text-secondary);font-size:13px;gap:8px">
+      <span class="llm-loading"><span class="llm-dot"></span><span class="llm-dot"></span><span class="llm-dot"></span></span> Loading dashboard...
+    </div>
+  </div>
+</div>
+
+<div id="incidentModal" class="incident-modal" style="display:none">
+  <div class="incident-card">
+    <div class="incident-header">
+      <div>
+        <div class="incident-title">Incident Report — Auto-generated</div>
+        <div style="font-size:12px;color:var(--color-text-secondary);margin-top:4px">Emergency Response Orchestrator</div>
+      </div>
+      <button class="incident-close" onclick="closeIncident()" aria-label="Close">✕</button>
+    </div>
+    <div class="incident-meta" id="incidentMeta"></div>
+    <div class="incident-section-title">Contributing factors (at trigger time)</div>
+    <div id="incidentFactors"></div>
+    <div class="incident-section-title">Alerts dispatched via</div>
+    <div id="incidentChannels"></div>
+    <div class="incident-section-title">Workers in zone at trigger</div>
+    <div id="incidentWorkers"></div>
+    <div class="incident-section-title">Regulatory reference</div>
+    <div class="incident-factor" id="incidentReg"></div>
+    <div class="incident-section-title">Evacuation checklist</div>
+    <div id="incidentChecklist"></div>
+    <button class="btn-pdf" id="pdfDownloadBtn" onclick="downloadPDF()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Download PDF Report
+    </button>
+    <div style="margin-top:12px;padding:12px;background:var(--color-red-bg);border-radius:var(--radius-md)">
+      <div style="font-size:12px;font-weight:600;color:var(--color-red);margin-bottom:4px">Lead time advantage</div>
+      <div style="font-size:13px;color:#791F1F;line-height:1.5">Compound risk flagged <span id="leadTime">—</span> before any single sensor would have breached its standalone threshold. This is the detection gap SafetyIQ closes.</div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

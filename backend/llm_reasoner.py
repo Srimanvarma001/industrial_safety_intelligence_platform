@@ -1,9 +1,23 @@
 import json
-import random
+import os
 from pathlib import Path
 
-
 OISD_PATH = Path(__file__).parent / "data" / "oisd_excerpts.json"
+
+_openai_client = None
+
+
+def _get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            try:
+                from openai import OpenAI
+                _openai_client = OpenAI(api_key=api_key)
+            except ImportError:
+                pass
+    return _openai_client
 
 
 def _load_corpus() -> list[dict]:
@@ -43,39 +57,98 @@ def retrieve_relevant_regulations(zone: dict) -> list[dict]:
     return [item[1] for item in scored[:3]]
 
 
-def generate_risk_explanation(zone: dict, score: int, reasons: list[dict]) -> dict:
-    regulations = retrieve_relevant_regulations(zone)
+def _build_prompt(zone: dict, score: int, reasons: list[dict], regulations: list[dict]) -> str:
+    factors = "\n".join(f"  - {r['t']} (weight: {r['w']})" for r in reasons)
+    reg_text = "\n".join(f"  - {r['standard']} {r['section']}: {r['text']}"
+                         for r in regulations) if regulations else "  - (none matched)"
 
-    explanation_parts = []
-    for r in reasons:
-        explanation_parts.append(f"  • {r['t']} (weight: {r['w']})")
+    return f"""You are a safety compliance expert at an industrial plant. Analyze the following zone situation and explain why the combination of conditions is dangerous.
 
+Zone: {zone.get('id')} ({zone.get('name')})
+Compound Risk Score: {score}/100
+Current Gas: {zone.get('currentGas', 'N/A')} ppm (threshold: {zone.get('gasThresh', 'N/A')} ppm)
+Permit: {zone.get('permit', 'none')}
+Maintenance: {zone.get('maintenance', 'none')}
+Shift Changeover: {zone.get('changeover', False)}
+Workers: {zone.get('workers', 0)}
+
+Contributing Factors:
+{factors}
+
+Relevant Regulations:
+{reg_text}
+
+Write a concise paragraph (3-4 sentences) explaining:
+1. Why this specific combination of conditions is dangerous
+2. What could go wrong if left unaddressed
+3. What makes this situation urgent
+
+Focus on the compound nature of the risk — no single factor triggered this alone."""
+
+
+def _call_openai(prompt: str) -> str | None:
+    client = _get_openai_client()
+    if not client:
+        return None
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=300,
+            temperature=0.3,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"[llm] OpenAI API error: {e}")
+        return None
+
+
+def _generate_fallback_explanation(zone: dict, score: int, reasons: list[dict]) -> str:
     explanation = (
-        f"Zone {zone['id']} ({zone['name']}) has a compound risk score of **{score}/100** "
-        f"classified as **{_get_label(score)}**.\n\n"
-        f"**Contributing factors:**\n"
-        + "\n".join(explanation_parts) +
-        "\n\n**Why this combination is dangerous:**"
+        f"Zone {zone['id']} ({zone['name']}) has a compound risk score of {score}/100 "
+        f"classified as {_get_label(score)}.\n\n"
+        f"Contributing factors:\n" +
+        "\n".join(f"  * {r['t']} (weight: {r['w']})" for r in reasons)
     )
 
-    if any("hot_work" in str(r) for r in reasons) and any("gas" in str(r) for r in reasons):
+    reason_text = str(reasons).lower()
+    if "hot work" in reason_text and "gas" in reason_text:
         explanation += (
-            "\nHot work creates an ignition source. Rising gas levels in the same zone mean "
+            "\n\nHot work creates an ignition source. Rising gas levels in the same zone mean "
             "flammable atmosphere is accumulating. A single spark could trigger an explosion — "
             "this is the exact compound condition that led to the Vizag incident."
         )
-    if any("confined_space" in str(r) for r in reasons):
+    if "confined space" in reason_text:
         explanation += (
             "\nConfined space entry during elevated gas readings is extremely hazardous. "
             "Workers inside have limited egress. Gas accumulation in confined spaces "
             "reaches dangerous concentrations faster than in open areas."
         )
-    if any("changeover" in str(r) for r in reasons):
+    if "changeover" in reason_text:
         explanation += (
             "\nShift changeover creates a supervision gap. Incoming personnel may not be "
             "fully briefed on active permits and current gas trends. Critical warnings "
             "can be lost during handoff."
         )
+    return explanation
+
+
+def generate_risk_explanation(zone: dict, score: int, reasons: list[dict]) -> dict:
+    regulations = retrieve_relevant_regulations(zone)
+
+    prompt = _build_prompt(zone, score, reasons, regulations)
+    llm_explanation = _call_openai(prompt)
+
+    if llm_explanation:
+        explanation = (
+            f"Zone {zone['id']} ({zone['name']}) has a compound risk score of **{score}/100** "
+            f"classified as **{_get_label(score)}**.\n\n"
+            f"**Contributing factors:**\n"
+            + "\n".join(f"  • {r['t']} (weight: {r['w']})" for r in reasons) +
+            f"\n\n**Analysis (AI-generated):**\n{llm_explanation}"
+        )
+    else:
+        explanation = _generate_fallback_explanation(zone, score, reasons)
 
     reg_citations = []
     for reg in regulations:
@@ -92,7 +165,8 @@ def generate_risk_explanation(zone: dict, score: int, reasons: list[dict]) -> di
         "score": score,
         "label": _get_label(score),
         "explanation": explanation,
-        "regulatory_citations": reg_citations
+        "regulatory_citations": reg_citations,
+        "llm_generated": llm_explanation is not None,
     }
 
 

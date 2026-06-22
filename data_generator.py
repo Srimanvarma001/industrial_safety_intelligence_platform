@@ -175,8 +175,8 @@ if __name__ == "__main__":
         def send_to_api(client: httpx.Client, events: list[dict]):
             for evt in events:
                 try:
-                    if evt["event_type"] == "gas_reading":
-                        client.post(f"/api/zones/{evt['zone_id']}/update", json={"gas": evt["ppm"]})
+                    if evt.get("event_type") == "gas_reading":
+                        client.post(f"/api/zones/{evt['zone_id']}/update", json={"gas": evt.get("ppm", 0)})
                 except Exception as e:
                     print(f"[Generator] API error: {e}")
 
