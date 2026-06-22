@@ -172,21 +172,21 @@ if __name__ == "__main__":
     if output_mode == "api":
         import httpx
 
-        def send_to_api(events: list[dict]):
-            with httpx.Client(base_url="http://localhost:8000") as client:
-                for evt in events:
-                    try:
-                        if evt["event_type"] == "gas_reading":
-                            client.post(f"/api/zones/{evt['zone_id']}/update", json={"gas": evt["ppm"]})
-                    except Exception as e:
-                        print(f"[Generator] API error: {e}")
+        def send_to_api(client: httpx.Client, events: list[dict]):
+            for evt in events:
+                try:
+                    if evt["event_type"] == "gas_reading":
+                        client.post(f"/api/zones/{evt['zone_id']}/update", json={"gas": evt["ppm"]})
+                except Exception as e:
+                    print(f"[Generator] API error: {e}")
 
         batch: list[dict] = []
-        for evt in run(interval=2.0):
-            batch.append(evt)
-            if len(batch) >= 8:
-                send_to_api(batch)
-                batch = []
+        with httpx.Client(base_url="http://localhost:8000") as client:
+            for evt in run(interval=2.0):
+                batch.append(evt)
+                if len(batch) >= 8:
+                    send_to_api(client, batch)
+                    batch = []
     else:
         for evt in run(interval=2.0):
             print(json.dumps(evt))

@@ -49,22 +49,18 @@ async def dispatch_alert(alert_type: str, title: str, description: str, zone_id:
 
     for channel_key, channel_info in channels.items():
         try:
-            if channel_key == "slack":
+            if channel_key in ("slack", "emergency_team"):
                 webhook_result = await _send_webhook(channel_info["recipient"], title, description, zone_id, score)
-                alert_entry["channels_dispatched"].append({
-                    "channel": channel_info["channel"],
-                    "recipient": channel_info["recipient"],
-                    "status": "delivered" if webhook_result else "failed",
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                })
+                status = "delivered" if webhook_result else "failed"
             else:
-                alert_entry["channels_dispatched"].append({
-                    "channel": channel_info["channel"],
-                    "recipient": channel_info["recipient"],
-                    "status": "delivered",
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                })
-            results.append({"channel": channel_info["channel"], "status": "delivered"})
+                status = "delivered"
+            alert_entry["channels_dispatched"].append({
+                "channel": channel_info["channel"],
+                "recipient": channel_info["recipient"],
+                "status": status,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            results.append({"channel": channel_info["channel"], "status": status})
         except Exception as e:
             logger.error(f"Failed to dispatch alert via {channel_key}: {e}")
             results.append({"channel": channel_info["channel"], "status": "failed", "error": str(e)})

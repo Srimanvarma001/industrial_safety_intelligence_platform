@@ -2,9 +2,13 @@ import io
 from datetime import datetime, timezone
 from typing import Any
 
+from llm_reasoner import retrieve_relevant_regulations
+
 
 def generate_incident_report(zone: dict, reasons: list[dict], workers: int) -> dict:
     ts = datetime.now(timezone.utc)
+
+    regulations = retrieve_relevant_regulations(zone)
 
     report = {
         "incident_id": f"INC-{ts.strftime('%Y%m%d%H%M%S')}",
@@ -22,6 +26,14 @@ def generate_incident_report(zone: dict, reasons: list[dict], workers: int) -> d
                 "detail": f"{r.get('pct', 'N/A')}% of threshold" if r.get("pct") else None
             }
             for r in reasons
+        ],
+        "regulatory_citations": [
+            {
+                "standard": r["standard"],
+                "section": r["section"],
+                "text": r["text"]
+            }
+            for r in regulations
         ],
         "checklist": [
             f"Immediately suspend all hot work permits in {zone['id']}",
@@ -91,15 +103,21 @@ def generate_pdf(report: dict) -> bytes:
 
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(60, 60, 60)
-    pdf.multi_cell(0, 5,
-        "OISD Standard 116 S4.2.1: Hot work in areas with flammable gas requires continuous "
-        "atmospheric monitoring. Gas readings within 80% of LEL threshold mandate work stoppage."
-    )
-    pdf.ln(2)
-    pdf.multi_cell(0, 5,
-        "Factory Act 1948 S41B: Manufacturer's obligation to disclose hazardous process "
-        "information before permit issuance."
-    )
+    citations = report.get("regulatory_citations", [])
+    if citations:
+        for reg in citations:
+            pdf.multi_cell(0, 5, f"{reg['standard']} {reg['section']}: {reg['text']}")
+            pdf.ln(2)
+    else:
+        pdf.multi_cell(0, 5,
+            "OISD Standard 116 S4.2.1: Hot work in areas with flammable gas requires continuous "
+            "atmospheric monitoring. Gas readings within 80% of LEL threshold mandate work stoppage."
+        )
+        pdf.ln(2)
+        pdf.multi_cell(0, 5,
+            "Factory Act 1948 S41B: Manufacturer's obligation to disclose hazardous process "
+            "information before permit issuance."
+        )
 
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 11)

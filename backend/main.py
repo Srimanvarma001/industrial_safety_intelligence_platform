@@ -5,6 +5,7 @@ LLM reasoning layer with OISD RAG, alert orchestration,
 incident report generation, and historical near-miss matching.
 """
 
+import asyncio
 import json
 import math
 import random
@@ -19,7 +20,7 @@ from pydantic import BaseModel
 
 from risk_engine import compute_compound_risk, get_risk_label
 from llm_reasoner import generate_risk_explanation
-from alerts import dispatch_alert, get_alert_log
+from alerts import dispatch_alert, get_alert_log, ALERT_LOG
 from report_generator import generate_incident_report, generate_pdf
 from near_miss import find_similar_incidents, get_pattern_insights
 
@@ -52,6 +53,54 @@ state = [dict(z) for z in ZONES]
 gas_history: dict[str, list[int]] = {z["id"]: [z["baseGas"]] for z in state}
 incident_log: list[dict] = []
 sim_time = datetime(2026, 6, 22, 10, 14, 0, tzinfo=timezone.utc)
+
+# ---------------------------------------------------------------------------
+# JSON persistence
+# ---------------------------------------------------------------------------
+
+DATA_DIR = Path(__file__).parent / "data"
+STATE_PATH = DATA_DIR / "persisted_state.json"
+
+
+def _save_state():
+    try:
+        data = {
+            "state": state,
+            "gas_history": gas_history,
+            "incident_log": incident_log,
+            "alert_log": ALERT_LOG,
+            "sim_time": sim_time.isoformat(),
+        }
+        with open(STATE_PATH, "w") as f:
+            json.dump(data, f, default=str, indent=2)
+    except Exception as e:
+        print(f"[persist] Failed to save state: {e}")
+
+
+def _load_state():
+    global state, gas_history, incident_log, sim_time
+    if not STATE_PATH.exists():
+        return
+    try:
+        with open(STATE_PATH) as f:
+            data = json.load(f)
+        if "state" in data and len(data["state"]) == 8:
+            state.clear()
+            state.extend(data["state"])
+            gas_history.clear()
+            gas_history.update(data.get("gas_history", {}))
+            incident_log.clear()
+            incident_log.extend(data.get("incident_log", []))
+            if "alert_log" in data:
+                ALERT_LOG.clear()
+                ALERT_LOG.extend(data["alert_log"])
+            if "sim_time" in data:
+                sim_time = datetime.fromisoformat(data["sim_time"])
+    except Exception as e:
+        print(f"[persist] Failed to load state: {e}")
+
+
+_load_state()
 
 
 def _get_zone(zid: str) -> dict:
@@ -127,6 +176,7 @@ async def update_zone(zone_id: str, update: ZoneUpdate):
         z["workers"] = update.workers
 
     score, reasons = compute_compound_risk(z, gas_history.get(zone_id))
+    _save_state()
     return {"zone_id": zone_id, "score": score, "reasons": reasons, "riskLabel": get_risk_label(score)}
 
 
@@ -166,6 +216,7 @@ async def trigger_scenario():
                                 "Z3 risk score crossed 80 — no single sensor flagged this", "Z3", score)
             results.append({"action": "orchestrator_fired", "score": score})
 
+    _save_state()
     return {"scenario": "vizag", "zone": "Z3", "steps": results}
 
 
@@ -201,10 +252,11 @@ async def create_incident(zone_id: str):
     report = generate_incident_report(z_copy, reasons, z_copy.get("workers", 0))
     incident_log.insert(0, report)
 
-    await dispatch_alert("red", f"Incident report generated for {zone_id}",
-                         f"Score: {score}/100 — Emergency Response Orchestrator fired", zone_id, score)
+    dispatch_results = await dispatch_alert("red", f"Incident report generated for {zone_id}",
+                                            f"Score: {score}/100 — Emergency Response Orchestrator fired", zone_id, score)
+    _save_state()
 
-    return {"incident": report}
+    return {"incident": report, "dispatched": dispatch_results}
 
 
 @app.get("/api/incident/{zone_id}/pdf")
@@ -269,7 +321,7 @@ async def tick():
     sim_time = sim_time.replace(second=(sim_time.second + 15) % 60)
 
     for z in state:
-        noise = (random.random() - 0.5) * 4
+        noise = await asyncio.to_thread(lambda: (random.random() - 0.5) * 4)
         current = z.get("currentGas", z["baseGas"]) + noise
         current = max(0, current)
         z["currentGas"] = round(current, 1)
@@ -279,6 +331,7 @@ async def tick():
         if len(gh) > 12:
             gh.pop(0)
 
+    _save_state()
     return {"status": "ok", "simTime": sim_time.isoformat()}
 
 

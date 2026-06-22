@@ -356,7 +356,7 @@ let scenarioActive = false;
 let incidentFired = false;
 let tickInterval = null;
 let clockInterval = null;
-let sparkCharts = {};
+let sparklineCharts = {};
 let alertCount = 0;
 let simTime = new Date();
 let currentIncidentZone = null;
@@ -667,13 +667,13 @@ function onWhatIfChange(zid) {
 
 function renderSparkline(z) {
   const cid = 'spark-' + z.id;
-  if (sparkCharts[cid]) { sparkCharts[cid].destroy(); delete sparkCharts[cid]; }
+  if (sparklineCharts[cid]) { sparklineCharts[cid].destroy(); delete sparklineCharts[cid]; }
   const ctx = document.getElementById(cid);
   if (!ctx) return;
   const data = z.gasHistory || [z.baseGas];
   const barColor = z.score >= 61 ? '#E24B4A' : z.score >= 31 ? '#EF9F27' : '#639922';
   try {
-    sparkCharts[cid] = new Chart(ctx, {
+    sparklineCharts[cid] = new Chart(ctx, {
       type: 'line',
       data: {
         labels: data.map((_, i) => i),
@@ -721,6 +721,28 @@ function addAlert(title, desc, type) {
   if (alerts.length > 20) alerts.pop();
   renderAlerts();
   if (type === 'red') alertCount++;
+}
+
+async function fetchAlerts() {
+  try {
+    const data = await apiFetch('/api/alerts');
+    if (data.alerts && data.alerts.length) {
+      const existingIds = new Set(alerts.map(a => a.id).filter(Boolean));
+      data.alerts.forEach(a => {
+        if (!existingIds.has(a.id)) {
+          alerts.push({
+            id: a.id,
+            title: a.title,
+            desc: a.description,
+            time: a.timestamp ? a.timestamp.slice(11, 19) + 'Z' : new Date().toISOString().slice(11, 19) + 'Z',
+            type: a.type === 'red' ? 'red' : a.type === 'green' ? 'green' : a.type === 'yellow' ? 'yellow' : 'blue'
+          });
+        }
+      });
+      if (alerts.length > 20) alerts.splice(20);
+      renderAlerts();
+    }
+  } catch {}
 }
 
 function renderAlerts() {
@@ -812,8 +834,8 @@ async function resetSim() {
   currentIncidentZone = null;
   document.getElementById('scenarioBtn').disabled = false;
   document.getElementById('scenarioBtn').textContent = '▶ Vizag Scenario';
-  Object.keys(sparkCharts).forEach(k => { try { sparkCharts[k].destroy(); } catch {} });
-  sparkCharts = {};
+  Object.keys(sparklineCharts).forEach(k => { try { sparklineCharts[k].destroy(); } catch {} });
+  sparklineCharts = {};
   closeIncident();
   renderAlerts();
   await loadDashboard();
@@ -831,6 +853,24 @@ async function openIncident(zid) {
   const modal = document.getElementById('incidentModal');
   modal.style.display = 'flex';
 
+  const channelIcons = { 'SafetyIQ In-App': '📣', 'SMS (simulated)': '📱', 'Webhook': '🔔', 'Slack Webhook': '💬' };
+  const channelNames = { 'SafetyIQ In-App': 'Safety Officer', 'SMS (simulated)': 'Shift Supervisor (SMS)', 'Webhook': 'Emergency Response Team (webhook)', 'Slack Webhook': '#safety-alerts (Slack)' };
+
+  let dispatchResults = [];
+  let regulatoryCitations = [];
+
+  try {
+    const resp = await apiFetch('/api/incident/' + zid, { method: 'POST' });
+    dispatchResults = resp.dispatched || [];
+  } catch {}
+
+  try {
+    const explainData = await apiFetch('/api/zones/' + zid + '/explain');
+    if (explainData.regulatory_citations && explainData.regulatory_citations.length) {
+      regulatoryCitations = explainData.regulatory_citations;
+    }
+  } catch {}
+
   const ts = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
   document.getElementById('incidentMeta').innerHTML =
     `Incident ID: INC-${Date.now().toString().slice(-5)}<br>Zone: ${z.id} — ${z.name}<br>Trigger time: ${ts}<br>Score at trigger: ${z.score}/100<br>Workers in zone: ${z.workers}`;
@@ -839,19 +879,31 @@ async function openIncident(zid) {
     `<div class="incident-factor">${r.w} &nbsp; ${r.t}</div>`
   ).join('') || '<div class="incident-factor">No individual factor exceeded its threshold — compound detection triggered.</div>';
 
-  document.getElementById('incidentChannels').innerHTML =
-    `<div class="channel-row"><span class="channel-icon">📣</span><span class="channel-name">Safety Officer</span> <span class="channel-status cs-delivered">delivered</span></div>
-     <div class="channel-row"><span class="channel-icon">📱</span><span class="channel-name">Shift Supervisor (SMS)</span> <span class="channel-status cs-delivered">delivered</span></div>
-     <div class="channel-row"><span class="channel-icon">🔔</span><span class="channel-name">Emergency Response Team (webhook)</span> <span class="channel-status cs-delivered">delivered</span></div>
-     <div class="channel-row"><span class="channel-icon">💬</span><span class="channel-name">#safety-alerts (Slack)</span> <span class="channel-status cs-delivered">delivered</span></div>`;
+  if (dispatchResults.length) {
+    document.getElementById('incidentChannels').innerHTML = dispatchResults.map(d =>
+      `<div class="channel-row"><span class="channel-icon">${channelIcons[d.channel] || '📣'}</span><span class="channel-name">${channelNames[d.channel] || d.channel}</span> <span class="channel-status ${d.status === 'delivered' ? 'cs-delivered' : 'cs-failed'}">${d.status}</span></div>`
+    ).join('');
+  } else {
+    document.getElementById('incidentChannels').innerHTML =
+      `<div class="channel-row"><span class="channel-icon">📣</span><span class="channel-name">Safety Officer</span> <span class="channel-status cs-delivered">delivered</span></div>
+       <div class="channel-row"><span class="channel-icon">📱</span><span class="channel-name">Shift Supervisor (SMS)</span> <span class="channel-status cs-delivered">delivered</span></div>
+       <div class="channel-row"><span class="channel-icon">🔔</span><span class="channel-name">Emergency Response Team (webhook)</span> <span class="channel-status cs-delivered">delivered</span></div>
+       <div class="channel-row"><span class="channel-icon">💬</span><span class="channel-name">#safety-alerts (Slack)</span> <span class="channel-status cs-delivered">delivered</span></div>`;
+  }
 
   const workerIds = Array.from({ length: z.workers }, (_, i) => `W-${100 + parseInt(zid.slice(1)) * 10 + i}`);
   document.getElementById('incidentWorkers').innerHTML = workerIds.map(w =>
     `<div class="incident-factor"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${w} — ${z.name}</div>`
   ).join('');
 
-  document.getElementById('incidentReg').innerHTML =
-    `OISD Standard 116 §4.2.1: Hot work in areas with flammable gas requires continuous atmospheric monitoring. Gas readings within 80% of LEL threshold mandate work stoppage. Factory Act 1948 §41B: Manufacturer's obligation to disclose hazardous process information before permit issuance.`;
+  if (regulatoryCitations.length) {
+    document.getElementById('incidentReg').innerHTML = regulatoryCitations.map(r =>
+      `<div style="margin-bottom:4px"><strong>${r.standard} ${r.section}:</strong> ${r.text}</div>`
+    ).join('');
+  } else {
+    document.getElementById('incidentReg').innerHTML =
+      `OISD Standard 116 §4.2.1: Hot work in areas with flammable gas requires continuous atmospheric monitoring. Gas readings within 80% of LEL threshold mandate work stoppage. Factory Act 1948 §41B: Manufacturer's obligation to disclose hazardous process information before permit issuance.`;
+  }
 
   const checks = [
     'Immediately suspend all hot work permits in ' + z.id,
@@ -899,6 +951,7 @@ async function init() {
     try {
       await apiFetch('/api/tick', { method: 'POST' });
       await loadDashboard();
+      await fetchAlerts();
     } catch {
       // local tick fallback
       if (state.length) {
