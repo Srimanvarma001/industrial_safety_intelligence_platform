@@ -8,10 +8,13 @@ incident report generation, and historical near-miss matching.
 import asyncio
 import json
 import math
+import os
 import random
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+_ON_VERCEL = os.environ.get("VERCEL") is not None
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -138,7 +141,8 @@ class ScenarioStep(BaseModel):
 @app.on_event("startup")
 async def startup():
     init_db()
-    asyncio.create_task(_tick_broadcaster())
+    if not _ON_VERCEL:
+        asyncio.create_task(_tick_broadcaster())
 
 
 @app.on_event("shutdown")
@@ -341,6 +345,9 @@ async def reset():
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
+    if _ON_VERCEL:
+        await ws.close(code=1000, reason="WebSocket not supported on Vercel")
+        return
     await manager.connect(ws)
     try:
         dashboard = _build_dashboard()

@@ -4,12 +4,13 @@ Replaces in-memory state with an async SQLite database.
 """
 
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = Path("/tmp/safetyiq_data") if os.environ.get("VERCEL") else Path(__file__).parent / "data"
 DB_PATH = DATA_DIR / "safetyiq.db"
 
 _connection: sqlite3.Connection | None = None
