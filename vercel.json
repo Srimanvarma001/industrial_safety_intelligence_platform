@@ -1,5 +1,5 @@
 {
   "buildCommand": null,
   "outputDirectory": null,
-  "framework": "fastapi"
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
 }
