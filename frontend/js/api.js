@@ -3,8 +3,12 @@ const API = (window.location.origin.includes('localhost') || window.location.ori
 
 const WS_URL = API.replace(/^http/, 'ws') + '/ws';
 
+const WS_MAX_RETRIES = 5;
+const WS_RETRY_BASE_MS = 3000;
+
 let ws = null;
 let wsReconnectTimer = null;
+let wsRetryCount = 0;
 let onDashboardUpdate = null;
 let onConnectionChange = null;
 let isConnected = false;
@@ -46,6 +50,7 @@ export function connectWebSocket(handlers) {
 
     ws.onopen = () => {
       setConnected(true);
+      wsRetryCount = 0;
       if (wsReconnectTimer) {
         clearTimeout(wsReconnectTimer);
         wsReconnectTimer = null;
@@ -81,10 +86,16 @@ export function connectWebSocket(handlers) {
 
 function scheduleReconnect(handlers) {
   if (wsReconnectTimer) return;
+  wsRetryCount++;
+  if (wsRetryCount > WS_MAX_RETRIES) {
+    console.warn('[ws] Max retries reached, stopping WebSocket reconnect');
+    return;
+  }
+  const delay = WS_RETRY_BASE_MS * Math.min(wsRetryCount, 5);
   wsReconnectTimer = setTimeout(() => {
     wsReconnectTimer = null;
     connectWebSocket(handlers);
-  }, 3000);
+  }, delay);
 }
 
 export function wsSend(data) {
@@ -94,6 +105,7 @@ export function wsSend(data) {
 }
 
 export function disconnectWebSocket() {
+  wsRetryCount = 0;
   if (wsReconnectTimer) {
     clearTimeout(wsReconnectTimer);
     wsReconnectTimer = null;
