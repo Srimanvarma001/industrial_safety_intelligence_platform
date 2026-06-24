@@ -22,12 +22,12 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from risk_engine import compute_compound_risk, get_risk_label
-from llm_reasoner import generate_risk_explanation
-from alerts import dispatch_alert, get_alert_log, ALERT_LOG
-from report_generator import generate_incident_report, generate_pdf
-from near_miss import find_similar_incidents, get_pattern_insights
-from database import (
+from backend.risk_engine import compute_compound_risk, get_risk_label
+from backend.llm_reasoner import generate_risk_explanation
+from backend.alerts import dispatch_alert, get_alert_log, ALERT_LOG
+from backend.report_generator import generate_incident_report, generate_pdf
+from backend.near_miss import find_similar_incidents, get_pattern_insights
+from backend.database import (
     init_db, get_all_zones, get_zone, update_zone,
     add_gas_reading, get_gas_history,
     insert_alert, get_recent_alerts,
@@ -386,4 +386,4 @@ if FRONTEND_DIR.is_dir():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)

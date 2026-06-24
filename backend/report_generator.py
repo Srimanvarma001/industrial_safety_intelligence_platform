@@ -2,7 +2,7 @@ import io
 from datetime import datetime, timezone
 from typing import Any
 
-from llm_reasoner import retrieve_relevant_regulations
+from backend.llm_reasoner import retrieve_relevant_regulations
 
 
 def generate_incident_report(zone: dict, reasons: list[dict], workers: int) -> dict:
