@@ -1,6 +1,6 @@
 export function renderAlerts(alerts) {
   const list = document.getElementById('alertList');
-  if (!alerts.length) {
+  if (!alerts || !alerts.length) {
     list.innerHTML = '<div style="font-size:13px;color:var(--color-text-secondary);padding:8px 0">No events yet</div>';
     return;
   }

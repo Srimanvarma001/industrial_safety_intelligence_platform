@@ -40,8 +40,8 @@ async function init() {
   });
 
   // Fallback: REST polling if WebSocket fails
-  await loadDashboardREST();
-  renderAlerts();
+      await loadDashboardREST();
+  renderAlerts(alerts);
   addAlert('Platform online', 'All 8 zones connected \u2014 sensor streams active', 'green');
   document.getElementById('loadingDetail').style.display = 'none';
   document.getElementById('noZoneMsg').style.display = '';

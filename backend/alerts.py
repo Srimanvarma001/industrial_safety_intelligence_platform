@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from backend.database import insert_alert
+from database import insert_alert
 
 logger = logging.getLogger("safetyiq.alerts")
 
