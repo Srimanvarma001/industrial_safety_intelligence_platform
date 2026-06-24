@@ -30,7 +30,7 @@ def get_conn() -> sqlite3.Connection:
             print(f"[safetyiq:db] FAILED to create DATA_DIR: {e}")
             raise
         try:
-            _connection = sqlite3.connect(str(DB_PATH))
+            _connection = sqlite3.connect(str(DB_PATH), check_same_thread=False)
             print("[safetyiq:db] sqlite3.connect OK")
         except Exception as e:
             print(f"[safetyiq:db] FAILED to connect: {e}")
