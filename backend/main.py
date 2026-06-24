@@ -15,34 +15,67 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+print("[safetyiq] === main.py starting ===")
+print(f"[safetyiq] __file__ = {__file__}")
+print(f"[safetyiq] __name__ = {__name__}")
+print(f"[safetyiq] cwd = {os.getcwd()}")
+print(f"[safetyiq] sys.path = {sys.path}")
+print(f"[safetyiq] VERCEL env = {os.environ.get('VERCEL', 'not set')}")
+
 _BACKEND_DIR = str(Path(__file__).parent.resolve())
 _PROJECT_ROOT = str(Path(__file__).parent.parent.resolve())
+print(f"[safetyiq] BACKEND_DIR = {_BACKEND_DIR}")
+print(f"[safetyiq] PROJECT_ROOT = {_PROJECT_ROOT}")
 for _p in (_BACKEND_DIR, _PROJECT_ROOT):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+print(f"[safetyiq] sys.path after insert = {sys.path}")
 
 _ON_VERCEL = os.environ.get("VERCEL") is not None
+print(f"[safetyiq] _ON_VERCEL = {_ON_VERCEL}")
 
+print("[safetyiq] importing fastapi...")
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+print("[safetyiq] fastapi imported OK")
 
+print("[safetyiq] importing risk_engine...")
 from risk_engine import compute_compound_risk, get_risk_label
+print("[safetyiq] risk_engine imported OK")
+
+print("[safetyiq] importing llm_reasoner...")
 from llm_reasoner import generate_risk_explanation
+print("[safetyiq] llm_reasoner imported OK")
+
+print("[safetyiq] importing alerts...")
 from alerts import dispatch_alert, get_alert_log, ALERT_LOG
+print("[safetyiq] alerts imported OK")
+
+print("[safetyiq] importing report_generator...")
 from report_generator import generate_incident_report, generate_pdf
+print("[safetyiq] report_generator imported OK")
+
+print("[safetyiq] importing near_miss...")
 from near_miss import find_similar_incidents, get_pattern_insights
+print("[safetyiq] near_miss imported OK")
+
+print("[safetyiq] importing database...")
 from database import (
     init_db, get_all_zones, get_zone, update_zone,
     add_gas_reading, get_gas_history,
     insert_alert, get_recent_alerts,
     insert_incident, get_all_incidents, reset_all, close_db,
 )
+print("[safetyiq] database imported OK")
 
+print("[safetyiq] creating FastAPI app...")
 app = FastAPI(title="SafetyIQ API", version="2.0.0")
+print("[safetyiq] FastAPI app created")
 
+print("[safetyiq] adding CORS middleware...")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,6 +83,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+print("[safetyiq] CORS middleware added")
 
 # ---------------------------------------------------------------------------
 # WebSocket connection manager
@@ -80,7 +114,9 @@ class ConnectionManager:
             for ws in dead:
                 self._connections.remove(ws)
 
+print("[safetyiq] creating ConnectionManager...")
 manager = ConnectionManager()
+print("[safetyiq] ConnectionManager created")
 
 # ---------------------------------------------------------------------------
 # Simulation state (kept in-memory for performance; persisted to SQLite)
@@ -94,6 +130,7 @@ scenario_active = False
 # ---------------------------------------------------------------------------
 
 def _enrich_zone(z: dict) -> dict:
+    print(f"[safetyiq] _enrich_zone({z.get('id', '?')})")
     z = dict(z)
     z["currentGas"] = z.get("current_gas") or z.get("currentGas") or z.get("base_gas", 20)
     gh = get_gas_history(z["id"])
@@ -147,18 +184,28 @@ class ScenarioStep(BaseModel):
 
 @app.on_event("startup")
 async def startup():
-    init_db()
+    print("[safetyiq] >>> startup event fired")
+    try:
+        init_db()
+        print("[safetyiq] init_db() completed")
+    except Exception as e:
+        print(f"[safetyiq] init_db() FAILED: {e}")
+        import traceback
+        traceback.print_exc()
     if not _ON_VERCEL:
         asyncio.create_task(_tick_broadcaster())
+        print("[safetyiq] background task created")
+    print("[safetyiq] <<< startup done")
 
 
 @app.on_event("shutdown")
 async def shutdown():
+    print("[safetyiq] >>> shutdown event")
     close_db()
+    print("[safetyiq] <<< shutdown done")
 
 
 async def _tick_broadcaster():
-    """Broadcast dashboard state via WebSocket every 3 seconds."""
     while True:
         await asyncio.sleep(3)
         try:
@@ -174,11 +221,20 @@ async def _tick_broadcaster():
 
 @app.get("/api/zones")
 def get_zones():
-    return {"zones": [_enrich_zone(z) for z in get_all_zones()], "timestamp": datetime.now(timezone.utc).isoformat()}
+    print(f"[safetyiq] GET /api/zones")
+    try:
+        result = {"zones": [_enrich_zone(z) for z in get_all_zones()], "timestamp": datetime.now(timezone.utc).isoformat()}
+        print(f"[safetyiq] GET /api/zones OK - {len(result['zones'])} zones")
+        return result
+    except Exception as e:
+        print(f"[safetyiq] GET /api/zones FAILED: {e}")
+        import traceback; traceback.print_exc()
+        raise HTTPException(500, str(e))
 
 
 @app.get("/api/zones/{zone_id}")
 def get_zone_endpoint(zone_id: str):
+    print(f"[safetyiq] GET /api/zones/{zone_id}")
     z = get_zone(zone_id)
     if not z:
         raise HTTPException(404, f"Zone {zone_id} not found")
@@ -257,23 +313,39 @@ async def trigger_scenario():
 
 @app.get("/api/zones/{zone_id}/explain")
 def explain_zone(zone_id: str):
+    print(f"[safetyiq] >>> GET /api/zones/{zone_id}/explain")
     z = get_zone(zone_id)
     if not z:
+        print(f"[safetyiq] zone {zone_id} not found for explain")
         raise HTTPException(404, f"Zone {zone_id} not found")
     enriched = _enrich_zone(z)
-    explanation = generate_risk_explanation(enriched, enriched["score"], enriched["reasons"])
-    return explanation
+    try:
+        explanation = generate_risk_explanation(enriched, enriched["score"], enriched["reasons"])
+        print(f"[safetyiq] <<< explain OK for {zone_id}")
+        return explanation
+    except Exception as e:
+        print(f"[safetyiq] explain FAILED for {zone_id}: {e}")
+        import traceback; traceback.print_exc()
+        raise
 
 
 @app.get("/api/zones/{zone_id}/near-misses")
 def get_near_misses(zone_id: str):
+    print(f"[safetyiq] >>> GET /api/zones/{zone_id}/near-misses")
     z = get_zone(zone_id)
     if not z:
+        print(f"[safetyiq] zone {zone_id} not found for near-misses")
         raise HTTPException(404, f"Zone {zone_id} not found")
     enriched = _enrich_zone(z)
-    matches = find_similar_incidents(enriched, enriched["score"], enriched["reasons"])
-    insight = get_pattern_insights(enriched, enriched["reasons"])
-    return {"matches": matches, "insight": insight}
+    try:
+        matches = find_similar_incidents(enriched, enriched["score"], enriched["reasons"])
+        insight = get_pattern_insights(enriched, enriched["reasons"])
+        print(f"[safetyiq] <<< near-misses OK for {zone_id}: {len(matches)} matches, insight={bool(insight)}")
+        return {"matches": matches, "insight": insight}
+    except Exception as e:
+        print(f"[safetyiq] near-misses FAILED for {zone_id}: {e}")
+        import traceback; traceback.print_exc()
+        raise
 
 
 @app.post("/api/incident/{zone_id}")
@@ -319,7 +391,15 @@ def list_incidents():
 
 @app.get("/api/dashboard")
 def get_dashboard():
-    return _build_dashboard()
+    print(f"[safetyiq] GET /api/dashboard")
+    try:
+        result = _build_dashboard()
+        print(f"[safetyiq] GET /api/dashboard OK - {len(result.get('zones', []))} zones")
+        return result
+    except Exception as e:
+        print(f"[safetyiq] GET /api/dashboard FAILED: {e}")
+        import traceback; traceback.print_exc()
+        raise HTTPException(500, str(e))
 
 
 @app.post("/api/tick")
@@ -387,9 +467,12 @@ async def websocket_endpoint(ws: WebSocket):
 # ---------------------------------------------------------------------------
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+print(f"[safetyiq] FRONTEND_DIR = {FRONTEND_DIR}, exists = {FRONTEND_DIR.is_dir()}")
 if FRONTEND_DIR.is_dir():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
+    print("[safetyiq] frontend mounted at /")
 
+print("[safetyiq] === main.py module loaded OK ===")
 
 if __name__ == "__main__":
     import uvicorn

@@ -2,7 +2,9 @@ import json
 import os
 from pathlib import Path
 
+print("[safetyiq:llm] llm_reasoner.py loading")
 OISD_PATH = Path(__file__).parent / "data" / "oisd_excerpts.json"
+print(f"[safetyiq:llm] OISD_PATH = {OISD_PATH}, exists = {OISD_PATH.exists()}")
 
 _openai_client = None
 
@@ -21,8 +23,16 @@ def _get_openai_client():
 
 
 def _load_corpus() -> list[dict]:
-    with open(OISD_PATH) as f:
-        return json.load(f)
+    print(f"[safetyiq:llm] _load_corpus from {OISD_PATH}")
+    try:
+        with open(OISD_PATH) as f:
+            data = json.load(f)
+        print(f"[safetyiq:llm] corpus loaded: {len(data)} entries")
+        return data
+    except Exception as e:
+        print(f"[safetyiq:llm] FAILED to load corpus: {e}")
+        import traceback; traceback.print_exc()
+        return []
 
 
 def _keyword_match(keywords: list[str], text: str) -> int:
@@ -31,6 +41,7 @@ def _keyword_match(keywords: list[str], text: str) -> int:
 
 
 def retrieve_relevant_regulations(zone: dict) -> list[dict]:
+    print(f"[safetyiq:llm] retrieve_relevant_regulations for zone {zone.get('id', '?')}")
     corpus = _load_corpus()
     query_terms = []
 
@@ -46,6 +57,7 @@ def retrieve_relevant_regulations(zone: dict) -> list[dict]:
         query_terms.append("worker safety")
 
     query_text = " ".join(query_terms)
+    print(f"[safetyiq:llm] query terms: {query_text[:60]}...")
 
     scored = []
     for entry in corpus:
@@ -54,7 +66,9 @@ def retrieve_relevant_regulations(zone: dict) -> list[dict]:
             scored.append((relevance, entry))
 
     scored.sort(key=lambda x: -x[0])
-    return [item[1] for item in scored[:3]]
+    result = [item[1] for item in scored[:3]]
+    print(f"[safetyiq:llm] matched {len(result)} regulations")
+    return result
 
 
 def _build_prompt(zone: dict, score: int, reasons: list[dict], regulations: list[dict]) -> str:
@@ -89,15 +103,19 @@ Focus on the compound nature of the risk — no single factor triggered this alo
 def _call_openai(prompt: str) -> str | None:
     client = _get_openai_client()
     if not client:
+        print("[safetyiq:llm] OpenAI client not available (no API key)")
         return None
     try:
+        print("[safetyiq:llm] calling OpenAI...")
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=300,
             temperature=0.3,
         )
-        return resp.choices[0].message.content.strip()
+        result = resp.choices[0].message.content.strip()
+        print(f"[safetyiq:llm] OpenAI response OK: {len(result)} chars")
+        return result
     except Exception as e:
         print(f"[llm] OpenAI API error: {e}")
         return None
@@ -134,6 +152,7 @@ def _generate_fallback_explanation(zone: dict, score: int, reasons: list[dict]) 
 
 
 def generate_risk_explanation(zone: dict, score: int, reasons: list[dict]) -> dict:
+    print(f"[safetyiq:llm] >>> generate_risk_explanation({zone.get('id', '?')}, score={score})")
     regulations = retrieve_relevant_regulations(zone)
 
     prompt = _build_prompt(zone, score, reasons, regulations)
@@ -144,7 +163,7 @@ def generate_risk_explanation(zone: dict, score: int, reasons: list[dict]) -> di
             f"Zone {zone['id']} ({zone['name']}) has a compound risk score of **{score}/100** "
             f"classified as **{_get_label(score)}**.\n\n"
             f"**Contributing factors:**\n"
-            + "\n".join(f"  • {r['t']} (weight: {r['w']})" for r in reasons) +
+            + "\n".join(f"  \u2022 {r['t']} (weight: {r['w']})" for r in reasons) +
             f"\n\n**Analysis (AI-generated):**\n{llm_explanation}"
         )
     else:
@@ -159,7 +178,7 @@ def generate_risk_explanation(zone: dict, score: int, reasons: list[dict]) -> di
             "id": reg["id"]
         })
 
-    return {
+    result = {
         "zone_id": zone["id"],
         "zone_name": zone["name"],
         "score": score,
@@ -168,6 +187,8 @@ def generate_risk_explanation(zone: dict, score: int, reasons: list[dict]) -> di
         "regulatory_citations": reg_citations,
         "llm_generated": llm_explanation is not None,
     }
+    print(f"[safetyiq:llm] <<< generate_risk_explanation done, llm_generated={llm_explanation is not None}")
+    return result
 
 
 def _get_label(score: int) -> str:
@@ -175,3 +196,5 @@ def _get_label(score: int) -> str:
     if score >= 61: return "HIGH"
     if score >= 31: return "MEDIUM"
     return "LOW"
+
+print("[safetyiq:llm] llm_reasoner.py loaded OK")

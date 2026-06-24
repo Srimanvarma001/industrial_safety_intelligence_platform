@@ -10,8 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+print("[safetyiq:db] database.py loading")
 DATA_DIR = Path("/tmp/safetyiq_data") if os.environ.get("VERCEL") else Path(__file__).parent / "data"
 DB_PATH = DATA_DIR / "safetyiq.db"
+print(f"[safetyiq:db] DATA_DIR = {DATA_DIR}")
+print(f"[safetyiq:db] DB_PATH = {DB_PATH}")
 
 _connection: sqlite3.Connection | None = None
 
@@ -19,68 +22,92 @@ _connection: sqlite3.Connection | None = None
 def get_conn() -> sqlite3.Connection:
     global _connection
     if _connection is None:
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        _connection = sqlite3.connect(str(DB_PATH))
+        print(f"[safetyiq:db] creating new SQLite connection at {DB_PATH}")
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            print(f"[safetyiq:db] DATA_DIR created/exists: {DATA_DIR}")
+        except Exception as e:
+            print(f"[safetyiq:db] FAILED to create DATA_DIR: {e}")
+            raise
+        try:
+            _connection = sqlite3.connect(str(DB_PATH))
+            print("[safetyiq:db] sqlite3.connect OK")
+        except Exception as e:
+            print(f"[safetyiq:db] FAILED to connect: {e}")
+            raise
         _connection.row_factory = sqlite3.Row
         _connection.execute("PRAGMA journal_mode=WAL")
         _connection.execute("PRAGMA foreign_keys=ON")
+        print("[safetyiq:db] pragmas set")
     return _connection
 
 
 def init_db():
+    print("[safetyiq:db] >>> init_db()")
     conn = get_conn()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS zones (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            workers INTEGER DEFAULT 2,
-            base_gas REAL DEFAULT 20,
-            gas_thresh REAL DEFAULT 50,
-            current_gas REAL DEFAULT NULL,
-            permit TEXT DEFAULT NULL,
-            maintenance TEXT DEFAULT NULL,
-            changeover INTEGER DEFAULT 0,
-            updated_at TEXT DEFAULT NULL
-        );
+    print("[safetyiq:db] got connection, creating tables...")
+    try:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS zones (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                workers INTEGER DEFAULT 2,
+                base_gas REAL DEFAULT 20,
+                gas_thresh REAL DEFAULT 50,
+                current_gas REAL DEFAULT NULL,
+                permit TEXT DEFAULT NULL,
+                maintenance TEXT DEFAULT NULL,
+                changeover INTEGER DEFAULT 0,
+                updated_at TEXT DEFAULT NULL
+            );
 
-        CREATE TABLE IF NOT EXISTS gas_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            zone_id TEXT NOT NULL REFERENCES zones(id),
-            reading REAL NOT NULL,
-            recorded_at TEXT NOT NULL
-        );
+            CREATE TABLE IF NOT EXISTS gas_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                zone_id TEXT NOT NULL REFERENCES zones(id),
+                reading REAL NOT NULL,
+                recorded_at TEXT NOT NULL
+            );
 
-        CREATE TABLE IF NOT EXISTS alerts (
-            id TEXT PRIMARY KEY,
-            type TEXT NOT NULL,
-            title TEXT NOT NULL,
-            description TEXT NOT NULL,
-            zone_id TEXT NOT NULL,
-            score INTEGER NOT NULL,
-            timestamp TEXT NOT NULL,
-            channels_dispatched TEXT DEFAULT '[]'
-        );
+            CREATE TABLE IF NOT EXISTS alerts (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                zone_id TEXT NOT NULL,
+                score INTEGER NOT NULL,
+                timestamp TEXT NOT NULL,
+                channels_dispatched TEXT DEFAULT '[]'
+            );
 
-        CREATE TABLE IF NOT EXISTS incidents (
-            id TEXT PRIMARY KEY,
-            zone_id TEXT NOT NULL,
-            report TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        );
+            CREATE TABLE IF NOT EXISTS incidents (
+                id TEXT PRIMARY KEY,
+                zone_id TEXT NOT NULL,
+                report TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
 
-        CREATE INDEX IF NOT EXISTS idx_gas_history_zone ON gas_history(zone_id, recorded_at);
-        CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts(timestamp DESC);
-        CREATE INDEX IF NOT EXISTS idx_incidents_created ON incidents(created_at DESC);
-    """)
-    conn.commit()
+            CREATE INDEX IF NOT EXISTS idx_gas_history_zone ON gas_history(zone_id, recorded_at);
+            CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts(timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_incidents_created ON incidents(created_at DESC);
+        """)
+        conn.commit()
+        print("[safetyiq:db] tables created OK")
+    except Exception as e:
+        print(f"[safetyiq:db] FAILED to create tables: {e}")
+        import traceback; traceback.print_exc()
+        raise
 
     _seed_zones()
+    print("[safetyiq:db] <<< init_db() done")
 
 
 def _seed_zones():
+    print("[safetyiq:db] >>> _seed_zones()")
     conn = get_conn()
     existing = conn.execute("SELECT COUNT(*) FROM zones").fetchone()[0]
+    print(f"[safetyiq:db] existing zones count = {existing}")
     if existing > 0:
+        print("[safetyiq:db] zones already seeded, skipping")
         return
 
     default_zones = [
@@ -94,12 +121,18 @@ def _seed_zones():
         ("Z8", "Control Room", 2, 2, 30, 2, None, None, False),
     ]
     now = datetime.now(timezone.utc).isoformat()
-    conn.executemany(
-        "INSERT INTO zones (id, name, workers, base_gas, gas_thresh, current_gas, permit, maintenance, changeover, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [(z[0], z[1], z[2], z[3], z[4], z[5], z[6], z[7], int(z[8]), now) for z in default_zones],
-    )
-    conn.commit()
+    try:
+        conn.executemany(
+            "INSERT INTO zones (id, name, workers, base_gas, gas_thresh, current_gas, permit, maintenance, changeover, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [(z[0], z[1], z[2], z[3], z[4], z[5], z[6], z[7], int(z[8]), now) for z in default_zones],
+        )
+        conn.commit()
+        print(f"[safetyiq:db] seeded {len(default_zones)} zones OK")
+    except Exception as e:
+        print(f"[safetyiq:db] FAILED to seed zones: {e}")
+        import traceback; traceback.print_exc()
+        raise
 
     for z in default_zones:
         conn.execute(
@@ -107,6 +140,7 @@ def _seed_zones():
             (z[0], z[3], now),
         )
     conn.commit()
+    print(f"[safetyiq:db] seeded gas_history OK")
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +150,8 @@ def _seed_zones():
 def get_all_zones() -> list[dict]:
     conn = get_conn()
     rows = conn.execute("SELECT * FROM zones ORDER BY id").fetchall()
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    return result
 
 
 def get_zone(zone_id: str) -> dict | None:
@@ -247,3 +282,5 @@ def close_db():
     if _connection:
         _connection.close()
         _connection = None
+
+print("[safetyiq:db] database.py loaded OK")

@@ -12,7 +12,9 @@ from typing import Any
 
 import httpx
 
+print("[safetyiq:alerts] alerts.py loading")
 from database import insert_alert
+print("[safetyiq:alerts] database import OK")
 
 logger = logging.getLogger("safetyiq.alerts")
 
@@ -22,6 +24,10 @@ WEBHOOK_URL = os.environ.get("SAFETYIQ_WEBHOOK_URL", "")
 SLACK_WEBHOOK_URL = os.environ.get("SAFETYIQ_SLACK_URL", "")
 SMS_API_URL = os.environ.get("SAFETYIQ_SMS_URL", "")
 SMS_API_KEY = os.environ.get("SAFETYIQ_SMS_API_KEY", "")
+print(f"[safetyiq:alerts] WEBHOOK_URL set = {bool(WEBHOOK_URL)}")
+print(f"[safetyiq:alerts] SLACK_WEBHOOK_URL set = {bool(SLACK_WEBHOOK_URL)}")
+print(f"[safetyiq:alerts] SMS_API_URL set = {bool(SMS_API_URL)}")
+print(f"[safetyiq:alerts] SMS_API_KEY set = {bool(SMS_API_KEY)}")
 
 HTTP_TIMEOUT = 10.0
 
@@ -44,6 +50,7 @@ async def _call_webhook(url: str, payload: dict, channel_name: str) -> dict:
 
 
 async def dispatch_alert(alert_type: str, title: str, description: str, zone_id: str, score: int) -> list[dict]:
+    print(f"[safetyiq:alerts] dispatch_alert({alert_type}, {title[:40]}..., {zone_id}, {score})")
     timestamp = datetime.now(timezone.utc).isoformat()
     results: list[dict] = []
 
@@ -105,8 +112,11 @@ async def dispatch_alert(alert_type: str, title: str, description: str, zone_id:
     except Exception as e:
         logger.error(f"[alerts] Failed to persist alert to database: {e}")
 
+    print(f"[safetyiq:alerts] dispatch_alert done: {len(results)} channels")
     return results
 
 
 def get_alert_log(limit: int = 20) -> list[dict]:
     return ALERT_LOG[:limit]
+
+print("[safetyiq:alerts] alerts.py loaded OK")

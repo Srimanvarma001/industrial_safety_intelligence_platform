@@ -1,5 +1,7 @@
 from typing import Any
 
+print("[safetyiq:re] risk_engine.py loading")
+
 
 def compute_compound_risk(zone: dict, gas_history: list[int] | None = None) -> tuple[int, list[dict]]:
     score = 0
@@ -38,7 +40,7 @@ def compute_compound_risk(zone: dict, gas_history: list[int] | None = None) -> t
 
     if zone.get("changeover"):
         score += 15
-        reasons.append({"w": "+15", "t": "Shift changeover — reduced supervision continuity", "pct": None})
+        reasons.append({"w": "+15", "t": "Shift changeover \u2014 reduced supervision continuity", "pct": None})
 
     workers = zone.get("workers", 0)
     if workers > 4:
@@ -57,3 +59,5 @@ def get_risk_label(score: int) -> str:
     if score >= 31:
         return "MEDIUM"
     return "LOW"
+
+print("[safetyiq:re] risk_engine.py loaded OK")

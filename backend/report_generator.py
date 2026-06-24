@@ -2,16 +2,19 @@ import io
 from datetime import datetime, timezone
 from typing import Any
 
+print("[safetyiq:rg] report_generator.py loading")
 from llm_reasoner import retrieve_relevant_regulations
+print("[safetyiq:rg] llm_reasoner import OK")
 
 
 def generate_incident_report(zone: dict, reasons: list[dict], workers: int) -> dict:
+    print(f"[safetyiq:rg] generate_incident_report({zone.get('id', '?')})")
     ts = datetime.now(timezone.utc)
 
     regulations = retrieve_relevant_regulations(zone)
 
     def _sanitize(text: str) -> str:
-        return text.replace("—", "-").replace("\u2013", "-").replace("\u2014", "-")
+        return text.replace("\u2014", "-").replace("\u2013", "-").replace("\u2014", "-")
 
     report = {
         "incident_id": f"INC-{ts.strftime('%Y%m%d%H%M%S')}",
@@ -49,10 +52,12 @@ def generate_incident_report(zone: dict, reasons: list[dict], workers: int) -> d
         ]
     }
 
+    print(f"[safetyiq:rg] report generated: {report['incident_id']}")
     return report
 
 
 def generate_pdf(report: dict) -> bytes:
+    print(f"[safetyiq:rg] generate_pdf for {report.get('incident_id', '?')}")
     from fpdf import FPDF
 
     pdf = FPDF()
@@ -142,4 +147,8 @@ def generate_pdf(report: dict) -> bytes:
         "threshold. This is the detection gap SafetyIQ closes."
     )
 
-    return io.BytesIO(pdf.output()).getvalue()
+    result = io.BytesIO(pdf.output()).getvalue()
+    print(f"[safetyiq:rg] PDF generated: {len(result)} bytes")
+    return result
+
+print("[safetyiq:rg] report_generator.py loaded OK")
