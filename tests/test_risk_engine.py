@@ -2,7 +2,10 @@ import pytest
 import sys
 sys.path.insert(0, "backend")
 
-from risk_engine import compute_compound_risk, get_risk_label
+from risk_engine import (
+    compute_compound_risk, compute_single_sensor_risk, compute_detection_gap,
+    get_risk_label, record_detection_event,
+)
 
 
 def test_low_risk():
@@ -112,3 +115,63 @@ def test_no_gas_threshold_division_by_zero():
             "permit": None, "maintenance": None, "changeover": False, "workers": 2}
     score, reasons = compute_compound_risk(zone, [10, 10, 10])
     assert score == 0
+
+
+def test_single_sensor_below_threshold():
+    zone = {"id": "Z1", "currentGas": 30, "gasThresh": 50}
+    score, reasons = compute_single_sensor_risk(zone)
+    assert score == 0
+    assert len(reasons) == 0
+
+
+def test_single_sensor_near_threshold():
+    zone = {"id": "Z1", "currentGas": 44, "gasThresh": 50}
+    score, reasons = compute_single_sensor_risk(zone)
+    assert score == 60
+    assert any("warning" in r["t"].lower() for r in reasons)
+
+
+def test_single_sensor_at_threshold():
+    zone = {"id": "Z1", "currentGas": 50, "gasThresh": 50}
+    score, reasons = compute_single_sensor_risk(zone)
+    assert score == 100
+    assert any("breached" in r["t"].lower() for r in reasons)
+
+
+def test_detection_gap_compound_only():
+    gap = compute_detection_gap(75, 0)
+    assert gap["compound_detected"] is True
+    assert gap["single_detected"] is False
+    assert gap["compound_only_detection"] is True
+    assert gap["gap_size"] == 75
+
+
+def test_detection_gap_both_detect():
+    gap = compute_detection_gap(75, 61)
+    assert gap["compound_detected"] is True
+    assert gap["single_detected"] is True
+    assert gap["compound_only_detection"] is False
+
+
+def test_detection_gap_neither():
+    gap = compute_detection_gap(30, 0)
+    assert gap["compound_detected"] is False
+    assert gap["single_detected"] is False
+    assert gap["compound_only_detection"] is False
+    assert gap["gap_size"] == 0
+
+
+def test_detection_stats_tracking():
+    from risk_engine import DETECTION_STATS, reset_detection_stats, get_detection_summary
+    reset_detection_stats()
+    record_detection_event(75, 0)
+    record_detection_event(61, 0)
+    record_detection_event(85, 100)
+    summary = get_detection_summary()
+    assert summary["total_events"] == 3
+    assert summary["compound_detections"] == 3
+    assert summary["single_sensor_detections"] == 1
+    assert summary["compound_only_detections"] == 2
+    assert summary["false_negative_rate_compound"] == 0.0
+    assert summary["false_negative_rate_single"] == 66.7
+    assert summary["fnr_reduction"] == 100.0

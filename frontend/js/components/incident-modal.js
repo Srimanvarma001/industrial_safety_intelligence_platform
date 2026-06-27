@@ -8,12 +8,16 @@ export function openIncident(zid, state) {
 
   let dispatchResults = [];
   let regulatoryCitations = [];
+  let leadTimeMinutes = null;
+  let detectionGap = null;
 
   Promise.all([
     (async () => {
       try {
         const resp = await apiFetch('/api/incident/' + zid, { method: 'POST' });
         dispatchResults = resp.dispatched || [];
+        if (resp.leadTimeMinutes != null) leadTimeMinutes = resp.leadTimeMinutes;
+        if (resp.detectionGap) detectionGap = resp.detectionGap;
       } catch {}
     })(),
     (async () => {
@@ -24,15 +28,15 @@ export function openIncident(zid, state) {
         }
       } catch {}
     })(),
-  ]).then(() => renderIncidentContent(z, zid, dispatchResults, regulatoryCitations));
+  ]).then(() => renderIncidentContent(z, zid, dispatchResults, regulatoryCitations, leadTimeMinutes, detectionGap));
 
-  renderIncidentContent(z, zid, [], []);
+  renderIncidentContent(z, zid, [], [], leadTimeMinutes, detectionGap);
 }
 
-function renderIncidentContent(z, zid, dispatchResults, regulatoryCitations) {
+function renderIncidentContent(z, zid, dispatchResults, regulatoryCitations, leadTimeMinutes, detectionGap) {
   const ts = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
   document.getElementById('incidentMeta').innerHTML =
-    `Incident ID: INC-${Date.now().toString().slice(-5)}<br>Zone: ${z.id} \u2014 ${z.name}<br>Trigger time: ${ts}<br>Score at trigger: ${z.score}/100<br>Workers in zone: ${z.workers}`;
+    `Incident ID: INC-${Date.now().toString().slice(-5)}<br>Zone: ${z.id} \u2014 ${z.name}<br>Trigger time: ${ts}<br>Score at trigger: ${z.score}/100 (compound) vs ${z.singleScore ?? '?'}/100 (single-sensor)<br>Workers in zone: ${z.workers}`;
 
   document.getElementById('incidentFactors').innerHTML = (z.reasons || []).map(r =>
     `<div class="incident-factor">${r.w} &nbsp; ${r.t}</div>`
@@ -79,7 +83,30 @@ function renderIncidentContent(z, zid, dispatchResults, regulatoryCitations) {
     `<div class="checklist-item"><span class="check-num">${i + 1}.</span><span>${c}</span></div>`
   ).join('');
 
-  document.getElementById('leadTime').textContent = '~12 minutes';
+  const leadTimeStr = leadTimeMinutes != null
+    ? `${leadTimeMinutes} minutes`
+    : (z.detectionGap && z.detectionGap.compoundOnlyDetection ? '~12 minutes (estimated)' : 'N/A');
+  document.getElementById('leadTime').textContent = leadTimeStr;
+
+  const gapEl = document.getElementById('detectionGapInfo');
+  const gap = detectionGap || z.detectionGap;
+  if (gap && gapEl) {
+    if (gap.compoundOnlyDetection) {
+      gapEl.innerHTML =
+        `<div style="margin-top:8px;padding:8px;background:var(--color-background-secondary);border-radius:6px;font-size:11px;line-height:1.5">
+          <strong style="color:var(--color-text-primary)">Baseline comparison</strong><br>
+          Compound engine: <strong>${gap.compoundScore}/100</strong> (detected)<br>
+          Single-sensor: <strong>${gap.singleScore}/100</strong> (would have missed)<br>
+          Detection gap: <strong>+${gap.gapSize} points</strong> — no single sensor would flag this
+        </div>`;
+    } else {
+      gapEl.innerHTML =
+        `<div style="margin-top:8px;padding:8px;background:var(--color-background-secondary);border-radius:6px;font-size:11px;line-height:1.5">
+          <strong style="color:var(--color-text-primary)">Baseline comparison</strong><br>
+          Both compound and single-sensor systems would detect this condition.
+        </div>`;
+    }
+  }
 }
 
 export function closeIncident() {

@@ -78,5 +78,61 @@
     "text": "Where any worker is exposed to any substances which may be injurious to health, the occupier shall provide suitable respiratory protective equipment and ensure its proper use.",
     "keywords": ["respiratory protection", "injurious substances", "RPE", "protective equipment"],
     "contexts": ["gas_exposure", "respiratory_hazard"]
+  },
+  {
+    "id": "dgms-ts-2023-5.1",
+    "standard": "DGMS Technical Standard",
+    "section": "§5.1",
+    "text": "In all mines where flammable or toxic gases are likely to be encountered, continuous gas monitoring systems shall be installed at all active working faces, return air courses, and gas drainage pipelines. Alarm set points shall not exceed 25% of the lower explosive limit for flammable gases.",
+    "keywords": ["DGMS", "mines", "gas monitoring", "flammable gas", "toxic gas", "alarm set point", "LEL"],
+    "contexts": ["gas_monitoring", "mine_safety", "alarm_thresholds"]
+  },
+  {
+    "id": "dgms-ts-2023-7.3",
+    "standard": "DGMS Technical Standard",
+    "section": "§7.3",
+    "text": "A comprehensive risk assessment shall be completed before the commencement of hot work in underground or surface mining operations. The assessment must consider methane layering, ventilation adequacy, presence of combustible dust, and the availability of fire suppression systems.",
+    "keywords": ["DGMS", "hot work", "risk assessment", "methane", "ventilation", "fire suppression", "mining"],
+    "contexts": ["hot_work_permit", "risk_assessment", "mining_operations"]
+  },
+  {
+    "id": "dgms-circular-04-2024",
+    "standard": "DGMS Circular",
+    "section": "No. 04/2024",
+    "text": "All shift changeovers in mines must include a mandatory gas reading review and equipment status handover. No miner shall be permitted to work in an area where gas readings have changed by more than 20% since the previous shift without a fresh risk assessment.",
+    "keywords": ["DGMS", "shift changeover", "gas reading", "handover", "mining", "risk assessment"],
+    "contexts": ["shift_changeover", "mine_handover", "gas_review"]
+  },
+  {
+    "id": "dgms-mmr-1957-126",
+    "standard": "DGMS (Mines & Metalliferous Regulations)",
+    "section": "MMR 126",
+    "text": "No person shall be permitted to enter a confined space in a mine until the atmosphere has been tested for oxygen content, flammable gases, and toxic contaminants. A confined space entry permit valid for one shift only shall be issued by the Mine Manager or authorised representative.",
+    "keywords": ["DGMS", "confined space", "atmosphere testing", "oxygen", "entry permit", "mine manager"],
+    "contexts": ["confined_space_entry", "mine_worker_safety"]
+  },
+  {
+    "id": "dgms-cmr-2017-102",
+    "standard": "DGMS (Coal Mines Regulations)",
+    "section": "CMR 102",
+    "text": "The workplace concentration of noxious gases shall be maintained below the threshold limit value. In coal mines, CO concentration shall not exceed 50 ppm in the general body of air. Continuous monitoring and recording of CO levels shall be carried out in all mechanised sections.",
+    "keywords": ["DGMS", "coal mines", "CO concentration", "threshold limit", "continuous monitoring", "noxious gases"],
+    "contexts": ["gas_limits", "coal_mining", "CO_monitoring"]
+  },
+  {
+    "id": "dgms-ts-2022-12.1",
+    "standard": "DGMS Technical Standard",
+    "section": "§12.1",
+    "text": "Emergency response plans for mines shall include provisions for fire, explosion, inundation, and toxic gas release. All underground workers shall carry self-contained self-rescuers (SCSR) with a minimum rated duration of 30 minutes. Evacuation drills shall be conducted at intervals not exceeding 90 days.",
+    "keywords": ["DGMS", "emergency response", "SCSR", "self-rescuer", "evacuation drill", "mine explosion"],
+    "contexts": ["emergency_response", "mine_evacuation", "worker_safety"]
+  },
+  {
+    "id": "dgms-circular-02-2023",
+    "standard": "DGMS Circular",
+    "section": "No. 02/2023",
+    "text": "Mine operators shall implement a permit-to-work system for all high-risk activities including hot work, confined space entry, excavation near gas pipelines, and electrical maintenance in hazardous areas. Permits shall be reviewed and countersigned by the Mine Manager or delegated safety officer.",
+    "keywords": ["DGMS", "permit to work", "hot work", "confined space", "mine manager", "hazardous area"],
+    "contexts": ["permit_system", "mining_hot_work", "mine_maintenance"]
   }
 ]

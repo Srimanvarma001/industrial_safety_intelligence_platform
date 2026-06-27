@@ -420,6 +420,13 @@ function fallbackLocalData() {
   return { zones: state };
 }
 
+function computeSingleSensorScoreLegacy(z) {
+  const pct = (z.currentGas || z.baseGas) / z.gasThresh;
+  if (pct >= 1.0) return 100;
+  if (pct > 0.8) return 60;
+  return 0;
+}
+
 function recalcLocalScores() {
   state.forEach(z => {
     let score = 0, reasons = [];
@@ -434,6 +441,7 @@ function recalcLocalScores() {
     if (z.workers > 4) { score += 5; reasons.push({t:'High worker density in zone',w:'+5',pct:null}); }
     z.score = Math.min(score, 100);
     z.reasons = reasons;
+    z.singleScore = computeSingleSensorScoreLegacy(z);
     if (z.gasHistory && z.gasHistory.length > 2) {
       const h = z.gasHistory;
       z.gasTrending = h[h.length-1] > h[h.length-3] + 3;
@@ -858,10 +866,12 @@ async function openIncident(zid) {
 
   let dispatchResults = [];
   let regulatoryCitations = [];
+  let leadTimeMinutes = null;
 
   try {
     const resp = await apiFetch('/api/incident/' + zid, { method: 'POST' });
     dispatchResults = resp.dispatched || [];
+    if (resp.leadTimeMinutes != null) leadTimeMinutes = resp.leadTimeMinutes;
   } catch {}
 
   try {
@@ -873,7 +883,7 @@ async function openIncident(zid) {
 
   const ts = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
   document.getElementById('incidentMeta').innerHTML =
-    `Incident ID: INC-${Date.now().toString().slice(-5)}<br>Zone: ${z.id} — ${z.name}<br>Trigger time: ${ts}<br>Score at trigger: ${z.score}/100<br>Workers in zone: ${z.workers}`;
+    `Incident ID: INC-${Date.now().toString().slice(-5)}<br>Zone: ${z.id} — ${z.name}<br>Trigger time: ${ts}<br>Score at trigger: ${z.score}/100 (compound) vs ${z.singleScore ?? '?'}/100 (single-sensor)<br>Workers in zone: ${z.workers}`;
 
   document.getElementById('incidentFactors').innerHTML = (z.reasons || []).map(r =>
     `<div class="incident-factor">${r.w} &nbsp; ${r.t}</div>`
@@ -917,7 +927,10 @@ async function openIncident(zid) {
     `<div class="checklist-item"><span class="check-num">${i+1}.</span><span>${c}</span></div>`
   ).join('');
 
-  document.getElementById('leadTime').textContent = '~12 minutes';
+  const leadTimeStr = leadTimeMinutes != null
+    ? `${leadTimeMinutes} minutes`
+    : '~12 minutes (estimated)';
+  document.getElementById('leadTime').textContent = leadTimeStr;
 }
 
 function closeIncident() {

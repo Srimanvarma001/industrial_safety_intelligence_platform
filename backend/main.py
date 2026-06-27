@@ -43,7 +43,10 @@ from pydantic import BaseModel
 print("[safetyiq] fastapi imported OK")
 
 print("[safetyiq] importing risk_engine...")
-from risk_engine import compute_compound_risk, get_risk_label
+from risk_engine import (
+    compute_compound_risk, compute_single_sensor_risk, compute_detection_gap,
+    get_risk_label, get_detection_summary, record_detection_event, reset_detection_stats,
+)
 print("[safetyiq] risk_engine imported OK")
 
 print("[safetyiq] importing llm_reasoner...")
@@ -124,6 +127,10 @@ print("[safetyiq] ConnectionManager created")
 
 sim_time = datetime(2026, 6, 22, 10, 14, 0, tzinfo=timezone.utc)
 scenario_active = False
+SCENARIO_STEP_INTERVAL_MINUTES = 3
+
+_first_cross_times: dict[str, datetime] = {}
+_incident_lead_times: dict[str, float] = {}
 
 # ---------------------------------------------------------------------------
 # Utility
@@ -135,15 +142,26 @@ def _enrich_zone(z: dict) -> dict:
     z["currentGas"] = z.get("current_gas") or z.get("currentGas") or z.get("base_gas", 20)
     gh = get_gas_history(z["id"])
     score, reasons = compute_compound_risk(z, gh)
+    single_score, single_reasons = compute_single_sensor_risk(z)
     z["currentGas"] = round(float(z["currentGas"]), 1)
     z["score"] = score
     z["reasons"] = reasons
+    z["singleScore"] = single_score
+    z["singleReasons"] = single_reasons
+    z["detectionGap"] = compute_detection_gap(score, single_score)
     z["riskLabel"] = get_risk_label(score)
     z["gasHistory"] = gh
     z["gasThresh"] = z.get("gas_thresh", z.get("gasThresh", 50))
     z["baseGas"] = z.get("base_gas", z.get("baseGas", 20))
     z["changeover"] = bool(z.get("changeover", False))
     z["workers"] = z.get("workers", 0)
+
+    record_detection_event(score, single_score)
+
+    zid = z["id"]
+    if score >= 61 and zid not in _first_cross_times:
+        _first_cross_times[zid] = sim_time
+
     return z
 
 
@@ -151,6 +169,7 @@ def _build_dashboard():
     zones = [_enrich_zone(z) for z in get_all_zones()]
     alert_count = sum(1 for z in zones if z["score"] >= 61)
     max_zone = max(zones, key=lambda x: x["score"]) if zones else {}
+    compound_only_count = sum(1 for z in zones if z.get("detectionGap", {}).get("compound_only_detection"))
     return {
         "zones": zones,
         "metrics": {
@@ -160,6 +179,12 @@ def _build_dashboard():
             "highestRiskZone": max_zone.get("id", ""),
             "highestRiskScore": max_zone.get("score", 0),
         },
+        "baselineComparison": {
+            "compoundOnlyDetections": compound_only_count,
+            "totalZones": len(zones),
+            "compoundOnlyPct": round(compound_only_count / len(zones) * 100, 1) if zones else 0,
+        },
+        "detectionSummary": get_detection_summary(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -268,12 +293,16 @@ def update_zone_endpoint(zone_id: str, update: ZoneUpdate):
 
 @app.post("/api/scenario/trigger")
 async def trigger_scenario():
-    global scenario_active
+    global sim_time, scenario_active
     scenario_active = True
 
     z = get_zone("Z3")
     if not z:
         raise HTTPException(404, "Zone Z3 not found")
+
+    _first_cross_times.pop("Z3", None)
+    lead_time_minutes = None
+    first_cross_step = None
 
     steps = [
         {"permit": "hot_work", "gas": 38, "msg": "Hot work permit activated"},
@@ -284,7 +313,7 @@ async def trigger_scenario():
     ]
 
     results = []
-    for step in steps:
+    for i, step in enumerate(steps):
         kwargs = {}
         if "permit" in step:
             kwargs["permit"] = step["permit"]
@@ -300,6 +329,12 @@ async def trigger_scenario():
 
         update_zone("Z3", **kwargs)
         enriched = _enrich_zone(get_zone("Z3"))
+
+        if enriched["score"] >= 61 and first_cross_step is None:
+            first_cross_step = i
+            _first_cross_times["Z3"] = sim_time
+            lead_time_minutes = (len(steps) - i) * SCENARIO_STEP_INTERVAL_MINUTES
+
         results.append({"score": enriched["score"], "label": get_risk_label(enriched["score"]), "message": step.get("msg", "")})
 
         if enriched["score"] >= 80:
@@ -307,8 +342,14 @@ async def trigger_scenario():
                 "Z3 risk score crossed 80 \u2014 no single sensor flagged this", "Z3", enriched["score"])
             results.append({"action": "orchestrator_fired", "score": enriched["score"], "dispatch": dispatch_results})
 
+        sim_time = sim_time.replace(minute=sim_time.minute + SCENARIO_STEP_INTERVAL_MINUTES)
+
     scenario_active = False
-    return {"scenario": "vizag", "zone": "Z3", "steps": results}
+    return {
+        "scenario": "vizag", "zone": "Z3", "steps": results,
+        "leadTimeMinutes": lead_time_minutes,
+        "firstCrossStep": first_cross_step,
+    }
 
 
 @app.get("/api/zones/{zone_id}/explain")
@@ -355,13 +396,28 @@ async def create_incident(zone_id: str):
         raise HTTPException(404, f"Zone {zone_id} not found")
     enriched = _enrich_zone(z)
 
+    lead_time_minutes = None
+    first_cross = _first_cross_times.get(zone_id)
+    if first_cross:
+        delta = sim_time - first_cross
+        lead_time_minutes = round(delta.total_seconds() / 60, 1)
+        if lead_time_minutes < 0:
+            lead_time_minutes = 0
+        _incident_lead_times[zone_id] = lead_time_minutes
+
     report = generate_incident_report(enriched, enriched["reasons"], enriched.get("workers", 0))
+    report["lead_time_minutes"] = lead_time_minutes
     insert_incident(report)
 
     dispatch_results = await dispatch_alert("red", f"Incident report generated for {zone_id}",
         f"Score: {enriched['score']}/100 \u2014 Emergency Response Orchestrator fired", zone_id, enriched["score"])
 
-    return {"incident": report, "dispatched": dispatch_results}
+    return {
+        "incident": report,
+        "dispatched": dispatch_results,
+        "leadTimeMinutes": lead_time_minutes,
+        "detectionGap": enriched.get("detectionGap"),
+    }
 
 
 @app.get("/api/incident/{zone_id}/pdf")
@@ -422,6 +478,9 @@ async def reset():
     global sim_time
     sim_time = datetime(2026, 6, 22, 10, 14, 0, tzinfo=timezone.utc)
     ALERT_LOG.clear()
+    _first_cross_times.clear()
+    _incident_lead_times.clear()
+    reset_detection_stats()
     reset_all()
     return {"status": "ok"}
 

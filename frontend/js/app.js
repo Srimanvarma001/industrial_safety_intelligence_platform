@@ -1,5 +1,5 @@
 import { apiFetch, connectWebSocket, disconnectWebSocket, isWsConnected, wsSend } from './api.js';
-import { recalcLocalScores, computeScore, getRiskLabel } from './risk-engine.js';
+import { recalcLocalScores, computeScore, computeSingleSensorScore, computeDetectionGap, getRiskLabel } from './risk-engine.js';
 import { renderGrid } from './components/zone-grid.js';
 import { showZoneDetail, destroySparklineCharts, sparklineCharts } from './components/zone-detail.js';
 import { renderAlerts } from './components/alert-feed.js';
@@ -13,6 +13,7 @@ let selectedZone = null;
 let alerts = [];
 let scenarioActive = false;
 let incidentFired = false;
+let localDetectionStats = { total_events: 0, compound_detections: 0, single_sensor_detections: 0, compound_only_detections: 0, compound_false_negatives: 0, single_false_negatives: 0 };
 let simTime = new Date();
 let currentIncidentZone = null;
 let restPollInterval = null;
@@ -29,6 +30,10 @@ window.closeIncident = closeIncident;
 window.downloadPDF = () => {
   if (currentIncidentZone) downloadPDF(currentIncidentZone);
 };
+
+document.addEventListener('zone-select', (e) => {
+  selectZone(e.detail.id);
+});
 
 // ---- Init ----
 
@@ -69,6 +74,7 @@ function onDashboardWS(data) {
   state = data.zones || [];
   simTime = new Date(data.timestamp || Date.now());
   updateMetrics(data.metrics);
+  updateDetectionSummary(data.detectionSummary, data.baselineComparison);
   renderGrid(state, selectedZone, selectZone);
   if (selectedZone) {
     const z = state.find(x => x.id === selectedZone);
@@ -95,6 +101,7 @@ async function loadDashboardREST() {
     state = data.zones;
     simTime = new Date(data.timestamp);
     updateMetrics(data.metrics);
+    updateDetectionSummary(data.detectionSummary, data.baselineComparison);
     renderGrid(state, selectedZone, selectZone);
     if (selectedZone) {
       const z = state.find(x => x.id === selectedZone);
@@ -108,13 +115,48 @@ async function loadDashboardREST() {
 
 function fallbackLocalData() {
   if (state.length) return { zones: state };
-  state = DEFAULT_ZONES.map(z => ({ ...z, currentGas: z.baseGas, gasHistory: [z.baseGas], score: 0, reasons: [] }));
+  state = DEFAULT_ZONES.map(z => ({ ...z, currentGas: z.baseGas, gasHistory: [z.baseGas], score: 0, reasons: [], singleScore: 0, detectionGap: {} }));
   recalcLocalScores(state);
+  state.forEach(z => recordLocalDetection(z));
+  const localSummary = getLocalDetectionSummary();
+  updateDetectionSummary(localSummary.detectionSummary, localSummary.baselineComparison);
   renderGrid(state, selectedZone, selectZone);
   updateMetrics();
   document.getElementById('loadingDetail').style.display = 'none';
   document.getElementById('noZoneMsg').style.display = '';
   return { zones: state };
+}
+
+function recordLocalDetection(z) {
+  const compound = z.score ?? 0;
+  const single = z.singleScore ?? 0;
+  localDetectionStats.total_events++;
+  if (compound >= 61) localDetectionStats.compound_detections++;
+  if (single >= 61) localDetectionStats.single_sensor_detections++;
+  if (compound >= 61 && single < 61) localDetectionStats.compound_only_detections++;
+  if (compound < 61) localDetectionStats.compound_false_negatives++;
+  if (single < 61 && compound >= 61) localDetectionStats.single_false_negatives++;
+}
+
+function getLocalDetectionSummary() {
+  const t = localDetectionStats.total_events || 1;
+  const fnrReduction = localDetectionStats.single_false_negatives > 0
+    ? Math.round((localDetectionStats.single_false_negatives - localDetectionStats.compound_false_negatives) / localDetectionStats.single_false_negatives * 100)
+    : 0;
+  const compoundOnlyCount = state.filter(z => z.detectionGap?.compoundOnlyDetection).length;
+  return {
+    detectionSummary: {
+      total_events: localDetectionStats.total_events,
+      compound_detections: localDetectionStats.compound_detections,
+      single_sensor_detections: localDetectionStats.single_sensor_detections,
+      compound_only_detections: localDetectionStats.compound_only_detections,
+      fnr_reduction: fnrReduction,
+    },
+    baselineComparison: {
+      compoundOnlyDetections: compoundOnlyCount,
+      totalZones: state.length,
+    },
+  };
 }
 
 function localTick() {
@@ -127,6 +169,9 @@ function localTick() {
     if (z.gasHistory.length > 12) z.gasHistory.shift();
   });
   recalcLocalScores(state);
+  state.forEach(z => recordLocalDetection(z));
+  const localSummary = getLocalDetectionSummary();
+  updateDetectionSummary(localSummary.detectionSummary, localSummary.baselineComparison);
   renderGrid(state, selectedZone, selectZone);
   updateMetrics();
   if (selectedZone) showZoneDetail(selectedZone, state, currentIncidentZone);
@@ -160,6 +205,22 @@ function updateMetrics(metrics) {
   document.getElementById('m-alerts').style.color = (metrics.activeAlerts || 0) > 0 ? '#E24B4A' : 'var(--color-text-primary)';
   document.getElementById('m-topzone').textContent = metrics.highestRiskZone ?? '\u2014';
   document.getElementById('m-topscore').textContent = 'score: ' + (metrics.highestRiskScore ?? '\u2014');
+}
+
+// ---- Detection Summary ----
+
+function updateDetectionSummary(detectionSummary, baselineComparison) {
+  if (!detectionSummary) return;
+  const el = (id) => document.getElementById(id);
+  el('ds-compound-pct').textContent = detectionSummary.total_events > 0
+    ? Math.round(detectionSummary.compound_detections / detectionSummary.total_events * 100) + '%'
+    : '—';
+  el('ds-single-pct').textContent = detectionSummary.total_events > 0
+    ? Math.round(detectionSummary.single_sensor_detections / detectionSummary.total_events * 100) + '%'
+    : '—';
+  el('ds-fnr-reduction').textContent = detectionSummary.fnr_reduction + '%';
+  el('ds-compound-only').textContent = baselineComparison?.compoundOnlyDetections ?? '—';
+  el('ds-fnr-reduction').style.color = detectionSummary.fnr_reduction > 0 ? '#3B6D11' : 'var(--color-text-primary)';
 }
 
 // ---- Alerts ----
@@ -225,11 +286,15 @@ window.triggerScenario = async function triggerScenario() {
 
   try {
     const data = await apiFetch('/api/scenario/trigger', { method: 'POST' });
+    const scenarioLeadTime = data.leadTimeMinutes;
     addAlert('Vizag Scenario triggered', 'Scripted compound risk sequence started on Z3', 'yellow');
     if (data.steps) {
       for (const step of data.steps) {
         if (step.action === 'orchestrator_fired') {
-          addAlert('COMPOUND RISK THRESHOLD BREACHED', 'Z3 risk score crossed 80 \u2014 no single sensor flagged this', 'red');
+          const alertMsg = scenarioLeadTime
+            ? `Z3 risk score crossed 80 \u2014 no single sensor flagged this (lead time: ${scenarioLeadTime} min)`
+            : 'Z3 risk score crossed 80 \u2014 no single sensor flagged this';
+          addAlert('COMPOUND RISK THRESHOLD BREACHED', alertMsg, 'red');
           setTimeout(async () => {
             if (!incidentFired) {
               incidentFired = true;
@@ -296,6 +361,7 @@ window.resetSim = async function resetSim() {
   incidentFired = false;
   selectedZone = null;
   currentIncidentZone = null;
+  localDetectionStats = { total_events: 0, compound_detections: 0, single_sensor_detections: 0, compound_only_detections: 0, compound_false_negatives: 0, single_false_negatives: 0 };
   document.getElementById('scenarioBtn').disabled = false;
   document.getElementById('scenarioBtn').textContent = '\u25B6 Vizag Scenario';
   destroySparklineCharts(sparklineCharts);
